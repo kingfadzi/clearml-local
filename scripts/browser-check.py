@@ -13,13 +13,15 @@ with sync_playwright() as p:
     page = browser.new_page()
     page.on('request', lambda r: hosts.setdefault(urlparse(r.url).hostname, set()).add(r.url.split('?')[0][:120]))
     page.on('requestfailed', lambda r: print('FAILED', r.url[:140], r.failure))
-    page.on('response', lambda r: print('HTTP', r.status, r.url[:140]) if r.status >= 400 else None)
+    page.on('response', lambda r: print('HTTP', r.status, r.url[:140]) if r.status >= 400 or '/api/' in r.url else None)
     page.on('console', lambda m: print('CONSOLE', m.type, m.text[:160]) if m.type in ('error', 'warning') else None)
     page.goto(web, wait_until='networkidle', timeout=60000)
     print('title:', page.title(), 'url:', page.url)
-    name = page.locator('input').first
+    page.wait_for_selector('form input', timeout=60000)
+    name = page.locator('form input').first
     if name.count():
         name.fill('offline-check')
+        page.wait_for_timeout(1000)
         page.locator('form button').first.click()
         try:
             page.wait_for_url(lambda u: '/login' not in u, timeout=30000)

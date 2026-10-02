@@ -61,10 +61,11 @@ def render(root, env):
     write_json(generated / 'config/apiserver.conf', {'pre_populate': {'enabled': False}})
     write_json(generated / 'config/services.conf', {'async_urls_delete': {'enabled': True, 'fileserver': {'url_prefixes': [need(env, 'CLEARML_FILES_URL')]}}})
     write_json(generated / 'config/fileserver.conf', {'delete': {'allow_batch': True}})
-    # The UI authenticates user creation at login with the webserver system credential; upstream ships a public one.
+    # In simple login mode the UI fetches credentials.json and uses the webserver system credential to create users.
     web = secure['credentials']['webserver']
-    write_json(generated / 'configuration.json', {'apiBaseUrl': '/api', 'fileBaseUrl': need(env, 'CLEARML_FILES_URL'),
-                                                     'userKey': web['user_key'], 'userSecret': web['user_secret'], 'displayedServerUrls': {'apiServer': need(env, 'CLEARML_API_URL'), 'filesServer': need(env, 'CLEARML_FILES_URL')}, 'hideUpdateNotice': True, 'showSurvey': False, 'GTM_ID': None, 'displayTips': False,
+    write_json(generated / 'credentials.json', {'userKey': web['user_key'], 'userSecret': web['user_secret'],
+                                                'companyID': 'd1bd92a3b039400cbafc60a7a5b1e52b'})  # apiserver default company
+    write_json(generated / 'configuration.json', {'apiBaseUrl': '/api', 'fileBaseUrl': need(env, 'CLEARML_FILES_URL'), 'displayedServerUrls': {'apiServer': need(env, 'CLEARML_API_URL'), 'filesServer': need(env, 'CLEARML_FILES_URL')}, 'hideUpdateNotice': True, 'showSurvey': False, 'GTM_ID': None, 'displayTips': False,
                                                      # enterpriseServer only hides the GitHub star widget (an api.github.com fetch) and a preferences notice.
                                                      'enterpriseServer': True})
     # Paths are resolved once, so moving the repository requires rerendering.
@@ -87,7 +88,8 @@ def render(root, env):
     services['async_delete']['depends_on'] = {n: {'condition': 'service_healthy'} for n in ('apiserver', 'fileserver')}
     services['webserver'] = {'image': need(env, 'WEB_IMAGE'), 'pull_policy': 'never', 'restart': 'unless-stopped',
                              'ports': port('WEB_PORT', 8080), 'depends_on': {n: {'condition': 'service_healthy'} for n in ('apiserver', 'fileserver')},
-                             'volumes': [f'{generated.resolve()}/configuration.json:/run/site-configuration.json:ro,z'],
+                             'volumes': [f'{generated.resolve()}/configuration.json:/run/site-configuration.json:ro,z',
+                                         f'{generated.resolve()}/credentials.json:/run/site-credentials.json:ro,z'],
                              'healthcheck': {'test': ['CMD', 'curl', '-fsS', 'http://localhost:8080/'], 'interval': '10s', 'timeout': '5s', 'retries': 10}}
     if boolean(env, 'ENABLE_AGENT', True):
         work = need(env, 'AGENT_WORK_DIR')

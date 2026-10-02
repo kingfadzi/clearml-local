@@ -108,7 +108,8 @@ class InstallerTests(unittest.TestCase):
         render(self.root,self.clearml_env());c=json.loads((self.root/'generated/configuration.json').read_text())
         self.assertTrue(c['enterpriseServer']);self.assertTrue(c['hideUpdateNotice']);self.assertIsNone(c['GTM_ID'])
         secure=json.loads((self.root/'generated/config/secure.conf').read_text())
-        self.assertEqual(c['userKey'],secure['credentials']['webserver']['user_key'])
+        creds=json.loads((self.root/'generated/credentials.json').read_text())
+        self.assertEqual(creds['userKey'],secure['credentials']['webserver']['user_key']);self.assertNotIn('userKey',c)
     def test_agent_service_stays_offline(self):
         env=self.clearml_env();services=render(self.root,env);agent=services['agent-services']
         self.assertIn('--cpu-only',agent['command']);self.assertIn('--create-queue',agent['command'])

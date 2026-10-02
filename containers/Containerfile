@@ -81,7 +81,10 @@ COPY --from=web-build /build/web/dist/report-widgets /usr/share/nginx/widgets
 RUN for root in /usr/share/nginx/html /usr/share/nginx/widgets; do \
       if [ -f "$root/browser/index.html" ]; then mv "$root/browser"/* "$root"/ && rmdir "$root/browser"; fi; \
       test -f "$root/index.html"; \
-    done
+    done && \
+    # The UI posts a telemetry/update check to a hardcoded public URL; point it at a local no-op endpoint.
+    grep -l 'https://updates.clear.ml/updates' /usr/share/nginx/html/*.js | xargs -r sed -i 's#https://updates.clear.ml/updates#/offline/updates#g' && \
+    ! grep -rq 'updates.clear.ml' /usr/share/nginx/html/*.js
 COPY containers/nginx.conf /etc/nginx/nginx.conf
 COPY containers/web-entrypoint.sh /usr/local/bin/web-entrypoint
 RUN chmod +x /usr/local/bin/web-entrypoint
