@@ -142,6 +142,13 @@ class InstallerTests(unittest.TestCase):
         secure=json.loads((self.root/'generated/config/secure.conf').read_text())
         creds=json.loads((self.root/'generated/web/credentials.json').read_text())
         self.assertEqual(creds['userKey'],secure['credentials']['webserver']['user_key']);self.assertNotIn('userKey',c)
+    def test_pre_populate_only_with_archives(self):
+        env=self.clearml_env();services=render(self.root,env)
+        self.assertFalse(json.loads((self.root/'generated/config/apiserver.conf').read_text())['pre_populate']['enabled'])
+        (self.root/'config/pre-populate').mkdir(parents=True);(self.root/'config/pre-populate/examples.zip').write_bytes(b'PK')
+        services=render(self.root,env)
+        self.assertTrue(json.loads((self.root/'generated/config/apiserver.conf').read_text())['pre_populate']['enabled'])
+        self.assertTrue(any(v.endswith('/opt/clearml/db-pre-populate:ro,z') for v in services['apiserver']['volumes']))
     def test_agent_service_stays_offline(self):
         env=self.clearml_env();services=render(self.root,env);agent=services['agent-services']
         self.assertIn('--cpu-only',agent['command']);self.assertIn('--create-queue',agent['command'])

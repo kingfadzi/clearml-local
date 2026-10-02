@@ -58,7 +58,11 @@ def render(root, env):
         for value in hosts['redis'].values():
             value.update(ssl=True, ssl_ca_certs='/etc/pki/tls/certs/ca-bundle.crt', ssl_cert_reqs='required')
     write_json(generated / 'config/hosts.conf', hosts)
-    write_json(generated / 'config/apiserver.conf', {'pre_populate': {'enabled': False}})
+    # Example projects: drop the upstream db-pre-populate archives into config/pre-populate/ to import them.
+    pre_populate = sorted((root / 'config/pre-populate').glob('*.zip'))
+    write_json(generated / 'config/apiserver.conf', {'pre_populate': {
+        'enabled': bool(pre_populate), 'zip_files': ['/opt/clearml/db-pre-populate'] if pre_populate else [],
+        'artifacts_path': '/mnt/fileserver', 'fail_on_error': False}})
     write_json(generated / 'config/services.conf', {'async_urls_delete': {'enabled': True, 'fileserver': {'url_prefixes': [need(env, 'CLEARML_FILES_URL')]}}})
     write_json(generated / 'config/fileserver.conf', {'delete': {'allow_batch': True}})
     # In simple login mode the UI fetches credentials.json and uses the webserver system credential to create users.
@@ -88,6 +92,8 @@ def render(root, env):
         services[name] = copy.deepcopy(common)
         services[name]['command'] = [name]
     services['apiserver'].update(ports=port('API_PORT', 8008), healthcheck=health(8008, 'debug.ping'))
+    if pre_populate:
+        services['apiserver']['volumes'].append(f'{(root / "config/pre-populate").resolve()}:/opt/clearml/db-pre-populate:ro,z')
     services['fileserver'].update(ports=port('FILES_PORT', 8081), healthcheck=health(8081, ''))
     services['async_delete']['depends_on'] = {n: {'condition': 'service_healthy'} for n in ('apiserver', 'fileserver')}
     services['webserver'] = {'image': need(env, 'WEB_IMAGE'), 'pull_policy': 'never', 'restart': 'unless-stopped',

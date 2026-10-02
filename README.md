@@ -62,6 +62,11 @@
 - Elasticsearch TLS options are client arguments; all nodes of a cluster must share one scheme.
 - API server logs print database URIs including passwords (upstream behaviour). Keep `LOG_DIR` private.
 
+## Example projects
+
+- The upstream Docker image seeds "ClearML Examples" from archives that are not part of the source tree. To get them, put the archives in `config/pre-populate/` and run `configure`; the API server imports them at startup (idempotent) and stores artifacts under `DATA_DIR`.
+- Obtain the archives from the official image on a machine with registry access: `c=$(docker create clearml/server:2.4.0 true); docker cp "$c:/opt/clearml/db-pre-populate" .; docker rm "$c"` (about 1 MB: examples, nvidia, services). Without archives the feature stays off.
+
 ## Services agent
 
 - Runs `clearml-agent daemon --services-mode --cpu-only --queue services --create-queue --docker TASK_IMAGE`.
