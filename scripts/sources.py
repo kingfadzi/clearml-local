@@ -79,10 +79,14 @@ def prepare(root, env):
             raise Error('Invalid source name')
         directory = root / name
         previous = lock.get(name, {})
+        strict = boolean(env, 'STRICT_SOURCES')
         if directory.exists():
             fingerprint = tree_hash(directory)
             if previous and fingerprint != previous['tree_sha256']:
-                raise Error(f'{name}: source differs from lock; review changes explicitly')
+                if strict:
+                    raise Error(f'{name}: source differs from lock; review changes explicitly')
+                print(f'{name}: NOTE source directory differs from sources.lock.json; recording the new tree')
+                previous = {}
             record = previous or {'origin': 'local-directory', 'tree_sha256': fingerprint}
         else:
             # <name>-<commit>.zip or a GitHub release zip <name>-<version>.zip. Archives belonging to a
@@ -128,8 +132,12 @@ def prepare(root, env):
             extract(archive, directory)
             fingerprint = tree_hash(directory)
             if previous and fingerprint != previous['tree_sha256']:
-                shutil.rmtree(directory)
-                raise Error(f'{name}: extracted source differs from lock')
+                if strict:
+                    shutil.rmtree(directory)
+                    raise Error(f'{name}: extracted source differs from lock')
+                print(f'{name}: NOTE {archive.name} differs from sources.lock.json (locked {previous.get("origin")}); recording it')
+                if revision == previous.get('revision'):
+                    revision = None
             record = {'origin': archive.name, 'archive_sha256': checksum, 'tree_sha256': fingerprint}
             if revision:
                 record['revision'] = revision

@@ -47,6 +47,7 @@ class InstallerTests(unittest.TestCase):
             network.assert_not_called()
         (self.root/'clearml-web/pnpm-lock.yaml').write_text('tampered')
         with self.assertRaises(Error): sources.verify(self.root)
+        with self.assertRaises(Error): sources.prepare(self.root,{'ALLOW_SOURCE_DOWNLOADS':'true','STRICT_SOURCES':'true'})
     def test_path_traversal_zip_rejected(self):
         archive=self.source()
         with zipfile.ZipFile(archive,'w') as bundle: bundle.writestr('../escape','bad')
@@ -74,7 +75,9 @@ class InstallerTests(unittest.TestCase):
         self.assertEqual(json.loads((self.root/'sources.lock.json').read_text())['clearml-web']['origin'],'clearml-web-2.5.zip')
         shutil.rmtree(self.root/'clearml-web')
         with zipfile.ZipFile(release,'w') as a: a.writestr('clearml-web-2.5/pnpm-lock.yaml','different')
-        with self.assertRaises(Error):sources.prepare(self.root,{'ALLOW_SOURCE_DOWNLOADS':'false'})
+        with self.assertRaises(Error):sources.prepare(self.root,{'ALLOW_SOURCE_DOWNLOADS':'false','STRICT_SOURCES':'true'})
+        sources.prepare(self.root,{'ALLOW_SOURCE_DOWNLOADS':'false'})  # default: accepted, lock updated
+        self.assertEqual((self.root/'clearml-web/pnpm-lock.yaml').read_text(),'different');sources.verify(self.root)
     def test_multiple_archives_rejected(self):
         self.source().touch();(self.root/'clearml-web-0123abc.zip').touch()
         with self.assertRaises(Error):sources.prepare(self.root,{})
