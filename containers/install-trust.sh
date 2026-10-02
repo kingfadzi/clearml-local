@@ -9,10 +9,13 @@ count=0
 if [ -s "$ZIP" ]; then
     mkdir -p "$CERT_DIR"
     python3 -m zipfile -e "$ZIP" "$CERT_DIR"
-    for cert in $(find "$CERT_DIR" -type f \( -name '*.pem' -o -name '*.crt' -o -name '*.cer' \)); do
-        cp "$cert" "$ANCHORS/site-$(basename "$cert").crt"
-        count=$((count + 1))
-    done
+    # File names may contain spaces; copy via find -exec and give each anchor a safe name.
+    find "$CERT_DIR" -type f \( -name '*.pem' -o -name '*.crt' -o -name '*.cer' \) -exec sh -c '
+        for cert do
+            name=$(basename "$cert" | tr -c "A-Za-z0-9._\n-" "_")
+            cp "$cert" "/etc/pki/ca-trust/source/anchors/site-$name.crt"
+        done' sh {} +
+    count=$(find "$ANCHORS" -name 'site-*.crt' ! -name 'site-bootstrap.crt' | wc -l)
     [ "$count" -gt 0 ] || { echo "install-trust: bundle has no .pem/.crt/.cer certificates" >&2; exit 1; }
     rm -rf "$CERT_DIR"
 fi
