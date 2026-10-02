@@ -13,7 +13,8 @@ Last updated: 2026-10-02. Workspace: `/home/fadzi/tools/clearML`.
 ## Lab decisions
 
 - Public PyPI, npm and vendor YUM repos are used in the lab through `ALLOWED_HOSTS`. Air gap: point the same keys at mirrors.
-- `YUM_REPO_FILE` is optional; the lab uses one only for `docker-ce-cli` and the database vendor repos.
+- RPM repositories come from the base image; there is no repo-file knob. The lab bakes Docker CE and the database vendor repos into derived bases (`mirror/almalinux9-repos:9`, `mirror/ubi9-repos:9.6`) with `containers/base-example/` from data-services.
+- `ALLOWED_HOSTS` is optional (blank disables it). `HTTP_PROXY`/`HTTPS_PROXY`/`NO_PROXY` reach build steps; blank means no proxy.
 - Redis 8.2 for EL9 comes from Remi's modular repo (`@redis:remi-8.2`); Redis's own repo has no EL9 Redis 8 RPM.
 - UBI 9 variant: `.env.ubi9` with `mirror/ubi9:9.6` as base and a UBI repo file. Image tags end in `-ubi9`.
 
