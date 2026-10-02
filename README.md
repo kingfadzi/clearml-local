@@ -64,7 +64,7 @@
 
 ## Example projects
 
-- The upstream Docker image seeds "ClearML Examples" from archives that are not part of the source tree. To get them, put the archives in `config/pre-populate/` and run `configure`; the API server imports them at startup (idempotent) and stores artifacts under `DATA_DIR`.
+- The upstream Docker image seeds "ClearML Examples" from archives that are not part of the source tree. Put the archives in `config/pre-populate/` before the first `install` and the API server imports them on its first start (empty database only). On an existing database run `./clearmlctl examples` to import them; the import is idempotent. Artifacts land under `DATA_DIR`.
 - Obtain the archives from the official image on a machine with registry access: `c=$(docker create clearml/server:2.4.0 true); docker cp "$c:/opt/clearml/db-pre-populate" .; docker rm "$c"` (about 1 MB: examples, nvidia, services). Without archives the feature stays off.
 
 ## Services agent

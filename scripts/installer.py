@@ -128,7 +128,7 @@ def step_verify(env):
 
 def main():
     parser = argparse.ArgumentParser(description='ClearML source-based offline installer. Chain commands run every earlier step too.')
-    parser.add_argument('command', choices=CHAIN + ['status','bundle','load'])
+    parser.add_argument('command', choices=CHAIN + ['examples','status','bundle','load'])
     parser.add_argument('--env', default='.env')
     parser.add_argument('--from', dest='start', choices=CHAIN, help='Start the chain at this step instead of the first (e.g. install --from configure on a host that loaded images)')
     parser.add_argument('--archive', help='Image archive for load command')
@@ -145,6 +145,14 @@ def main():
             globals()['step_' + step](env)
     elif command == 'status':
         compose(ROOT,'ps')
+    elif command == 'examples':
+        # The server imports config/pre-populate only on an empty database; this forces the import on an existing one.
+        if not list((ROOT / 'config/pre-populate').glob('*.zip')):
+            raise Error('Put the upstream db-pre-populate archives in config/pre-populate/ first')
+        render(ROOT, env)
+        compose(ROOT,'run','--rm','--no-deps','apiserver','python','-c',
+                'from apiserver.database import db\nfrom apiserver.mongo.initialize import pre_populate_data\ndb.initialize()\npre_populate_data()')
+        print('Example projects imported')
     elif command == 'bundle':
         sources.verify(ROOT)
         destination = ROOT / 'dist'
