@@ -25,7 +25,11 @@ def build_inputs(env):
     fetch_ca_bundle(ROOT, env)
     args = {k: need(env,k) for k in ('BASE_IMAGE', 'PYTHON_BUILDER_IMAGE', 'NODE_BUILDER_IMAGE', 'PIP_INDEX_URL', 'NPM_REGISTRY')}
     args['PNPM_VERSION'] = env.get('PNPM_VERSION') or '10'
-    args['DOCKER_CLI_PACKAGE'] = need(env, 'DOCKER_CLI_PACKAGE')
+    if boolean(env, 'ENABLE_AGENT', True):
+        local_image(need(env, 'DOCKER_CLI_IMAGE'), env)
+        ensure_image(env['DOCKER_CLI_IMAGE'])
+    # Always passed: the agent stage references it even when the target is not built.
+    args['DOCKER_CLI_IMAGE'] = env.get('DOCKER_CLI_IMAGE') or need(env, 'BASE_IMAGE')
     args['PIP_VERSION'] = env.get('PIP_VERSION') or '25.2'
     secrets = {}
     for key, name in [('PIP_CONFIG_FILE','pip_config'), ('NPM_CONFIG_FILE','npm_config')]:

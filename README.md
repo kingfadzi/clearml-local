@@ -27,7 +27,7 @@
 - Linux host with Docker Engine, BuildKit and Compose v2 (`--wait`). Python 3.11+.
 - `vm.max_map_count >= 262144` on the host that runs the database stack.
 - `BASE_IMAGE`, `PYTHON_BUILDER_IMAGE` and `NODE_BUILDER_IMAGE` are pulled from their registry when not present locally. Tags must be versioned (`:latest` is rejected) and, when `ALLOWED_HOSTS` is set, from a listed registry.
-- The base's repositories must provide `python3.11`, `nginx`, `shadow-utils`, `util-linux-core` and `DOCKER_CLI_PACKAGE`. The builder images come from the `builder-images` project: Python 3.11 with compilers; Node 24 (22.12+ accepted) with pnpm 10.
+- The base's repositories must provide `python3.11`, `nginx`, `shadow-utils` and `util-linux-core`. The builder images come from the `builder-images` project: Python 3.11 with compilers; Node 24 (22.12+ accepted) with pnpm 10; `almalinux9-docker-cli` for the Docker CLI binary copied into the agent image.
 - `TLS_CA_BUNDLE_URL`: URL of a zip holding the internally signed CA certificates (`.pem`/`.crt`/`.cer`, any folder layout). Blank means no private CA is required. `trust` or `build` downloads it to `config/tls-ca-bundle.zip`; every image stage installs it into OS trust.
 - Bootstrap: if the download host itself uses the private CA, place the CA by hand as `config/tls-ca-bundle.pem` (the same file is inside the zip). It is used to verify the download and is installed into the images as well.
 - Download failure: an already present `config/tls-ca-bundle.zip` is reused with a warning; otherwise the command stops and tells you to place the PEM or the zip. `./clearmlctl trust` stages and validates without building.
@@ -42,7 +42,7 @@
 - `PIP_VERSION`: pip installed in every runtime venv and pinned for task containers, so the agent's in-container pip upgrade is a no-op.
 - Database keys: copy from the data-services `generated/clearml.env` into the matching keys (replace, do not append).
 - `CLEARML_*_URL`: browser-reachable URLs. Task containers also use them.
-- `ENABLE_AGENT`, `TASK_IMAGE`, `AGENT_WORK_DIR` (absolute host path), `DOCKER_SOCKET`, `DOCKER_CLI_PACKAGE`.
+- `ENABLE_AGENT`, `TASK_IMAGE`, `AGENT_WORK_DIR` (absolute host path), `DOCKER_SOCKET`, `DOCKER_CLI_IMAGE` (builder image whose `/usr/bin/docker` is copied into the agent image).
 
 ## Build and install
 
