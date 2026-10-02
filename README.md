@@ -18,7 +18,7 @@
 
 - clearml-server v2.4.0, clearml-web v2.5, clearml v2.1.12, clearml-agent v3.0.3.
 - Downloads use GitHub ZIP archives resolved to a commit; never `git clone`.
-- Existing root directories or `<name>-<hex revision>.zip` files are reused without network access.
+- Existing root directories, `<name>-<commit>.zip` archives, or GitHub release zips `<name>-<version>.zip` in the root are used without network access. Archives are verified by the extracted tree hash in `sources.lock.json`.
 - Symlinks inside an archive are kept only when they stay inside the source root.
 
 ## Prerequisites

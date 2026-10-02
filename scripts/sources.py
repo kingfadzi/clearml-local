@@ -85,8 +85,13 @@ def prepare(root, env):
                 raise Error(f'{name}: source differs from lock; review changes explicitly')
             record = previous or {'origin': 'local-directory', 'tree_sha256': fingerprint}
         else:
-            # <name>-<hex revision>.zip; a plain glob would let clearml-*.zip match clearml-server-*.zip.
-            archives = sorted(p for p in root.glob(name + '-*.zip') if re.fullmatch(r'[0-9a-f]{7,40}', p.stem[len(name) + 1:]))
+            # <name>-<commit>.zip or a GitHub release zip <name>-<version>.zip. Archives belonging to a
+            # sibling source (clearml-server-*.zip when staging clearml) are excluded.
+            siblings = [other for other in manifest if other != name and other.startswith(name + '-')]
+            suffix = re.compile(r'(v?\d+(\.\d+)*([.-][0-9A-Za-z]+)*|[0-9a-f]{7,40})')
+            archives = sorted(p for p in root.glob(name + '-*.zip')
+                              if suffix.fullmatch(p.stem[len(name) + 1:])
+                              and not any(p.name.startswith(other + '-') for other in siblings))
             if (root / (name + '.zip')).exists():
                 archives.append(root / (name + '.zip'))
             if len(archives) > 1:
@@ -119,8 +124,7 @@ def prepare(root, env):
                 if not revision and re.fullmatch(r'[a-f0-9]{40}', archive.stem[len(name) + 1:]):
                     revision = archive.stem[len(name) + 1:]  # <name>-<commit>.zip supplied by hand
             checksum = sha(archive)
-            if previous.get('archive_sha256') and checksum != previous['archive_sha256']:
-                raise Error(f'{name}: archive checksum mismatch')
+            # The archive bytes may differ (release zip vs commit archive); the extracted tree is what is verified.
             extract(archive, directory)
             fingerprint = tree_hash(directory)
             if previous and fingerprint != previous['tree_sha256']:

@@ -63,6 +63,18 @@ class InstallerTests(unittest.TestCase):
         link=zipfile.ZipInfo('web-abcdef0/escape');link.external_attr=(0o120777<<16)
         with zipfile.ZipFile(archive,'w') as bundle: bundle.writestr(link,'../../etc/passwd')
         with self.assertRaises(Error):sources.prepare(self.root,{'ALLOW_SOURCE_DOWNLOADS':'false'})
+    def test_release_zip_accepted_when_tree_matches_lock(self):
+        archive=self.source()
+        with zipfile.ZipFile(archive,'w') as a: a.writestr('clearml-web-abcdef0/pnpm-lock.yaml','lockfileVersion: 9')
+        sources.prepare(self.root,{'ALLOW_SOURCE_DOWNLOADS':'false'})
+        shutil.rmtree(self.root/'clearml-web');archive.unlink()
+        release=self.root/'clearml-web-2.5.zip'
+        with zipfile.ZipFile(release,'w',compression=zipfile.ZIP_DEFLATED) as a: a.writestr('clearml-web-2.5/pnpm-lock.yaml','lockfileVersion: 9')
+        sources.prepare(self.root,{'ALLOW_SOURCE_DOWNLOADS':'false'})
+        self.assertEqual(json.loads((self.root/'sources.lock.json').read_text())['clearml-web']['origin'],'clearml-web-2.5.zip')
+        shutil.rmtree(self.root/'clearml-web')
+        with zipfile.ZipFile(release,'w') as a: a.writestr('clearml-web-2.5/pnpm-lock.yaml','different')
+        with self.assertRaises(Error):sources.prepare(self.root,{'ALLOW_SOURCE_DOWNLOADS':'false'})
     def test_multiple_archives_rejected(self):
         self.source().touch();(self.root/'clearml-web-0123abc.zip').touch()
         with self.assertRaises(Error):sources.prepare(self.root,{})
