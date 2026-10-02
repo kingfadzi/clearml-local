@@ -93,7 +93,7 @@ def render(root, env):
         services[name]['command'] = [name]
     services['apiserver'].update(ports=port('API_PORT', 8008), healthcheck=health(8008, 'debug.ping'))
     if pre_populate:
-        services['apiserver']['volumes'].append(f'{(root / "config/pre-populate").resolve()}:/opt/clearml/db-pre-populate:ro,z')
+        services['apiserver']['volumes'].append(f'{(root / "pre-populate").resolve()}:/opt/clearml/db-pre-populate:ro,z')
     services['fileserver'].update(ports=port('FILES_PORT', 8081), healthcheck=health(8081, ''))
     services['async_delete']['depends_on'] = {n: {'condition': 'service_healthy'} for n in ('apiserver', 'fileserver')}
     services['webserver'] = {'image': need(env, 'WEB_IMAGE'), 'pull_policy': 'never', 'restart': 'unless-stopped',
