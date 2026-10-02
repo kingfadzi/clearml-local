@@ -99,7 +99,7 @@
 - Headless browser: login, dashboard, projects, workers and settings pages loaded; only the ClearML host was contacted.
 - Restart of both stacks and reinstall kept tasks, logs and generated secrets.
 - Bundle exported, loaded in a clean directory, tampered checksum refused.
-- UBI 9: images built from `registry.access.redhat.com/ubi9/ubi:9.6` with a UBI repo file; see the git log for the acceptance result of that run.
+- UBI 9: ClearML and data-services images built from `ubi9/ubi:9.6` with a UBI repo file. Same acceptance passed: preflight, verify, SDK smoke, services task, browser check; database images ran on the existing volumes with all data visible.
 
 ## Limitations
 
