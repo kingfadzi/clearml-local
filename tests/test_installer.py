@@ -104,6 +104,11 @@ class InstallerTests(unittest.TestCase):
         self.assertEqual(secure['redis']['fileserver']['password'],env['REDIS_PASSWORD'])
         self.assertEqual(set(secure['credentials']),{'apiserver','fileserver','webserver','services_agent','tests'})
         self.assertNotIn('62T8CP7HGBC6647XF9314C2VY67RJO',json.dumps(secure))
+    def test_web_configuration_disables_external_calls(self):
+        render(self.root,self.clearml_env());c=json.loads((self.root/'generated/configuration.json').read_text())
+        self.assertTrue(c['enterpriseServer']);self.assertTrue(c['hideUpdateNotice']);self.assertIsNone(c['GTM_ID'])
+        secure=json.loads((self.root/'generated/config/secure.conf').read_text())
+        self.assertEqual(c['userKey'],secure['credentials']['webserver']['user_key'])
     def test_agent_service_stays_offline(self):
         env=self.clearml_env();services=render(self.root,env);agent=services['agent-services']
         self.assertIn('--cpu-only',agent['command']);self.assertIn('--create-queue',agent['command'])

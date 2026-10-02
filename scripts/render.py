@@ -61,7 +61,12 @@ def render(root, env):
     write_json(generated / 'config/apiserver.conf', {'pre_populate': {'enabled': False}})
     write_json(generated / 'config/services.conf', {'async_urls_delete': {'enabled': True, 'fileserver': {'url_prefixes': [need(env, 'CLEARML_FILES_URL')]}}})
     write_json(generated / 'config/fileserver.conf', {'delete': {'allow_batch': True}})
-    write_json(generated / 'configuration.json', {'apiBaseUrl': '/api', 'fileBaseUrl': need(env, 'CLEARML_FILES_URL'), 'displayedServerUrls': {'apiServer': need(env, 'CLEARML_API_URL'), 'filesServer': need(env, 'CLEARML_FILES_URL')}, 'hideUpdateNotice': True, 'showSurvey': False, 'GTM_ID': None, 'displayTips': False})
+    # The UI authenticates user creation at login with the webserver system credential; upstream ships a public one.
+    web = secure['credentials']['webserver']
+    write_json(generated / 'configuration.json', {'apiBaseUrl': '/api', 'fileBaseUrl': need(env, 'CLEARML_FILES_URL'),
+                                                     'userKey': web['user_key'], 'userSecret': web['user_secret'], 'displayedServerUrls': {'apiServer': need(env, 'CLEARML_API_URL'), 'filesServer': need(env, 'CLEARML_FILES_URL')}, 'hideUpdateNotice': True, 'showSurvey': False, 'GTM_ID': None, 'displayTips': False,
+                                                     # enterpriseServer only hides the GitHub star widget (an api.github.com fetch) and a preferences notice.
+                                                     'enterpriseServer': True})
     # Paths are resolved once, so moving the repository requires rerendering.
     config_dir = str((generated / 'config').resolve())
     data_dir = str((root / need(env, 'DATA_DIR')).resolve())
