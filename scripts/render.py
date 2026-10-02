@@ -58,8 +58,8 @@ def render(root, env):
         for value in hosts['redis'].values():
             value.update(ssl=True, ssl_ca_certs='/etc/pki/tls/certs/ca-bundle.crt', ssl_cert_reqs='required')
     write_json(generated / 'config/hosts.conf', hosts)
-    # Example projects: drop the upstream db-pre-populate archives into config/pre-populate/ to import them.
-    pre_populate = sorted((root / 'config/pre-populate').glob('*.zip'))
+    # Example projects: drop the upstream db-pre-populate archives into pre-populate/ (committed) and imported automatically.
+    pre_populate = sorted((root / 'pre-populate').glob('*.zip'))
     write_json(generated / 'config/apiserver.conf', {'pre_populate': {
         'enabled': bool(pre_populate), 'zip_files': ['/opt/clearml/db-pre-populate'] if pre_populate else [],
         'artifacts_path': '/mnt/fileserver', 'fail_on_error': False}})

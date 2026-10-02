@@ -147,8 +147,8 @@ def main():
         compose(ROOT,'ps')
     elif command == 'examples':
         # The server imports config/pre-populate only on an empty database; this forces the import on an existing one.
-        if not list((ROOT / 'config/pre-populate').glob('*.zip')):
-            raise Error('Put the upstream db-pre-populate archives in config/pre-populate/ first')
+        if not list((ROOT / 'pre-populate').glob('*.zip')):
+            raise Error('No archives in pre-populate/')
         render(ROOT, env)
         compose(ROOT,'run','--rm','--no-deps','apiserver','python','-c',
                 'from apiserver.database import db\nfrom apiserver.mongo.initialize import pre_populate_data\ndb.initialize()\npre_populate_data()')
@@ -161,7 +161,7 @@ def main():
         run('docker','save','-o',archive,*image_map(env).values())
         # Explicit allowlist avoids collecting real .env, generated secrets or database volumes.
         with tarfile.open(destination / 'installer.tar.gz','w:gz') as bundle:
-            for name in ('clearmlctl','scripts','containers','.env.example','.dockerignore','sources.json','sources.lock.json','README.md'):
+            for name in ('clearmlctl','scripts','containers','pre-populate','.env.example','.dockerignore','sources.json','sources.lock.json','README.md'):
                 bundle.add(ROOT/name, arcname=name, filter=lambda t: None if '__pycache__' in t.name else t)
             for name in json.loads((ROOT/'sources.json').read_text()):
                 bundle.add(ROOT/name, arcname=name, filter=lambda t: None if '/.git/' in t.name or t.name.endswith('/.git') else t)

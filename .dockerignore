@@ -10,3 +10,4 @@ dist
 generated
 !generated/trust
 config
+pre-populate

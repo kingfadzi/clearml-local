@@ -18,4 +18,3 @@ config/pip.conf
 config/npmrc
 wheelhouse/
 repositories/
-config/pre-populate/

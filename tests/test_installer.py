@@ -145,7 +145,7 @@ class InstallerTests(unittest.TestCase):
     def test_pre_populate_only_with_archives(self):
         env=self.clearml_env();services=render(self.root,env)
         self.assertFalse(json.loads((self.root/'generated/config/apiserver.conf').read_text())['pre_populate']['enabled'])
-        (self.root/'config/pre-populate').mkdir(parents=True);(self.root/'config/pre-populate/examples.zip').write_bytes(b'PK')
+        (self.root/'pre-populate').mkdir(parents=True);(self.root/'pre-populate/examples.zip').write_bytes(b'PK')
         services=render(self.root,env)
         self.assertTrue(json.loads((self.root/'generated/config/apiserver.conf').read_text())['pre_populate']['enabled'])
         self.assertTrue(any(v.endswith('/opt/clearml/db-pre-populate:ro,z') for v in services['apiserver']['volumes']))
