@@ -47,17 +47,13 @@
 ## Build and install
 
 ```sh
-./clearmlctl prepare        # stage sources, write sources.lock.json
-./clearmlctl trust          # download/validate the CA bundle into generated/trust (optional, build does it too)
-./clearmlctl dependencies   # optional: resolve wheels into wheelhouse/ (no-op when it matches the sources)
-./clearmlctl build          # resolves wheels if needed, then server, web, agent, task images
-./clearmlctl configure      # generated/ (secrets, mode 600)
-./clearmlctl preflight      # compose validation + authenticated DB checks inside the server image
-./clearmlctl install
-./clearmlctl verify
+./clearmlctl install        # runs the whole chain: trust, prepare, dependencies, build, configure, preflight, install
+./clearmlctl verify         # the chain plus endpoint checks
 ./clearmlctl status
 ```
 
+- Chain commands are cumulative and idempotent: `trust` (CA bundle), `prepare` (stage sources), `dependencies` (wheelhouse, skipped when current), `build` (four images, cached layers reused), `configure` (generated/, secrets mode 600), `preflight` (compose validation + authenticated DB checks inside the server image), `install`, `verify`. Each runs every earlier step.
+- `--from STEP` starts later, for example `./clearmlctl install --from configure` on a host that loaded the images with `load`.
 - `--env <file>` selects another env file, for example a UBI 9 variant with different image tags.
 - `generated/config/secure.conf` holds token signing secrets and every system credential. Back it up; it is reused on re-render.
 - Every upstream default credential (apiserver, fileserver, webserver, tests) is replaced by a generated one.

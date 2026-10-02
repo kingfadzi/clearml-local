@@ -51,81 +51,100 @@ def image_map(env):
         result.update(agent=need(env,'AGENT_IMAGE'), task=need(env,'TASK_IMAGE'))
     return result
 
+CHAIN = ['trust', 'prepare', 'dependencies', 'build', 'configure', 'preflight', 'install', 'verify']
+_inputs = {}
+
+def inputs(env):
+    if 'value' not in _inputs:
+        _inputs['value'] = build_inputs(env)
+    return _inputs['value']
+
+def wheelhouse_current():
+    lock = ROOT / 'wheelhouse/source-lock.json'
+    return lock.is_file() and json.loads(lock.read_text()) == json.loads((ROOT / 'sources.lock.json').read_text())
+
+def step_trust(env):
+    fetch_ca_bundle(ROOT, env)
+
+def step_prepare(env):
+    sources.prepare(ROOT, env)
+
+def step_dependencies(env):
+    if wheelhouse_current():
+        print('wheelhouse/ already matches the staged sources')
+        return
+    build_args, secret_files = inputs(env)
+    wheelhouse = ROOT / 'wheelhouse'
+    if wheelhouse.exists():
+        print('wheelhouse/ belongs to other sources; resolving again')
+        shutil.rmtree(wheelhouse)
+    tag = need(env,'SERVER_IMAGE') + '-dependencies'
+    docker_build(ROOT, env, 'containers/Containerfile', tag, build_args, secret_files, 'python-resolve')
+    container = run('docker', 'create', tag, 'true', capture_output=True, text=True).stdout.strip()
+    try:
+        run('docker','cp', f'{container}:/wheelhouse', wheelhouse)
+    finally:
+        run('docker','rm', container)
+    write_json(wheelhouse / 'source-lock.json', json.loads((ROOT / 'sources.lock.json').read_text()))
+    print('Dependency wheels and their hash lock are staged in wheelhouse/')
+
+def step_build(env):
+    sources.verify(ROOT)
+    build_args, secret_files = inputs(env)
+    for target, tag in image_map(env).items():
+        local_image(tag, env)
+        docker_build(ROOT, env, 'containers/Containerfile', tag, build_args, secret_files, target)
+    metadata = {}
+    for target, image in image_map(env).items():
+        metadata[target] = json.loads(run('docker','image','inspect', image, capture_output=True, text=True).stdout)[0]['Id']
+    write_json(ROOT / 'generated/build-images.json', metadata)
+
+def step_configure(env):
+    render(ROOT, env)
+    print('Configuration rendered in generated/ (contains secrets)')
+
+def step_preflight(env):
+    render(ROOT, env)
+    run('docker','info', stdout=subprocess.DEVNULL)
+    compose(ROOT,'config','--quiet')
+    for image in image_map(env).values():
+        run('docker','image','inspect',image, stdout=subprocess.DEVNULL)
+    compose(ROOT,'run','--rm','--no-deps','apiserver','check-databases')
+
+def step_install(env):
+    for key in ('DATA_DIR','LOG_DIR'):
+        (ROOT / need(env,key)).mkdir(parents=True, exist_ok=True)
+    compose(ROOT,'up','-d','--no-build','--pull','never','--wait','--wait-timeout','300')
+
+def step_verify(env):
+    import urllib.request
+    compose(ROOT,'run','--rm','--no-deps','apiserver','check-databases')
+    for key, suffix in [('CLEARML_API_URL','/debug.ping'),('CLEARML_WEB_URL','/'),('CLEARML_FILES_URL','/')]:
+        with urllib.request.urlopen(need(env,key).rstrip('/') + suffix, timeout=20) as response:
+            if response.status != 200:
+                raise Error(f'{key} health check failed')
+        print(key + ': healthy')
+    print('Run the documented authenticated acceptance test for experiment/artifact/task verification.')
+
 def main():
-    parser = argparse.ArgumentParser(description='ClearML source-based offline installer')
-    parser.add_argument('command', choices=['prepare','trust','preflight','dependencies','build','configure','install','status','verify','bundle','load'])
+    parser = argparse.ArgumentParser(description='ClearML source-based offline installer. Chain commands run every earlier step too.')
+    parser.add_argument('command', choices=CHAIN + ['status','bundle','load'])
     parser.add_argument('--env', default='.env')
+    parser.add_argument('--from', dest='start', choices=CHAIN, help='Start the chain at this step instead of the first (e.g. install --from configure on a host that loaded images)')
     parser.add_argument('--archive', help='Image archive for load command')
     args = parser.parse_args()
     env = env_file(ROOT / args.env)
     command = args.command
-    if command == 'prepare':
-        sources.prepare(ROOT, env)
-    elif command == 'trust':
-        fetch_ca_bundle(ROOT, env)
-    elif command in ('dependencies','build'):
-        build_args, secret_files = build_inputs(env)
-        wheelhouse = ROOT / 'wheelhouse'
-        source_lock = json.loads((ROOT / 'sources.lock.json').read_text())
-        def wheelhouse_current():
-            lock = wheelhouse / 'source-lock.json'
-            return lock.is_file() and json.loads(lock.read_text()) == source_lock
-        def resolve_dependencies():
-            if wheelhouse.exists():
-                print('wheelhouse/ belongs to other sources; resolving again')
-                shutil.rmtree(wheelhouse)
-            tag = need(env,'SERVER_IMAGE') + '-dependencies'
-            docker_build(ROOT, env, 'containers/Containerfile', tag, build_args, secret_files, 'python-resolve')
-            container = run('docker', 'create', tag, 'true', capture_output=True, text=True).stdout.strip()
-            try:
-                run('docker','cp', f'{container}:/wheelhouse', wheelhouse)
-            finally:
-                run('docker','rm', container)
-            write_json(wheelhouse / 'source-lock.json', source_lock)
-            print('Dependency wheels and their hash lock are staged in wheelhouse/')
-        if command == 'dependencies':
-            if wheelhouse_current():
-                print('wheelhouse/ already matches the staged sources')
-            else:
-                resolve_dependencies()
-        else:
-            sources.verify(ROOT)
-            # build resolves wheels itself when the wheelhouse is missing or belongs to other sources.
-            if not wheelhouse_current():
-                resolve_dependencies()
-            for target, tag in image_map(env).items():
-                local_image(tag, env)
-                docker_build(ROOT, env, 'containers/Containerfile', tag, build_args, secret_files, target)
-            metadata = {}
-            for target, image in image_map(env).items():
-                metadata[target] = json.loads(run('docker','image','inspect', image, capture_output=True, text=True).stdout)[0]['Id']
-            write_json(ROOT / 'generated/build-images.json', metadata)
-    elif command == 'configure':
-        render(ROOT, env)
-        print('Configuration rendered in generated/ (contains secrets)')
-    elif command in ('preflight','install'):
-        render(ROOT, env)
-        run('docker','info', stdout=subprocess.DEVNULL)
-        compose(ROOT,'config','--quiet')
-        for image in image_map(env).values():
-            run('docker','image','inspect',image, stdout=subprocess.DEVNULL)
-        compose(ROOT,'run','--rm','--no-deps','apiserver','check-databases')
-        if command == 'install':
-            for key in ('DATA_DIR','LOG_DIR'):
-                path = ROOT / need(env,key)
-                path.mkdir(parents=True, exist_ok=True)
-            compose(ROOT,'up','-d','--no-build','--pull','never','--wait','--wait-timeout','300')
+    if command in CHAIN:
+        first = CHAIN.index(args.start) if args.start else 0
+        last = CHAIN.index(command)
+        if first > last:
+            raise Error(f'--from {args.start} comes after {command}')
+        for step in CHAIN[first:last + 1]:
+            print(f'==> {step}')
+            globals()['step_' + step](env)
     elif command == 'status':
         compose(ROOT,'ps')
-    elif command == 'verify':
-        compose(ROOT,'run','--rm','--no-deps','apiserver','check-databases')
-        import urllib.request
-        for key, suffix in [('CLEARML_API_URL','/debug.ping'),('CLEARML_WEB_URL','/'),('CLEARML_FILES_URL','/')]:
-            with urllib.request.urlopen(need(env,key).rstrip('/') + suffix, timeout=20) as response:
-                if response.status != 200:
-                    raise Error(f'{key} health check failed')
-            print(key + ': healthy')
-        print('Run the documented authenticated acceptance test for experiment/artifact/task verification.')
     elif command == 'bundle':
         sources.verify(ROOT)
         destination = ROOT / 'dist'
