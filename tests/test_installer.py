@@ -76,14 +76,22 @@ class InstallerTests(unittest.TestCase):
         local_image('almalinux:9',{'ALLOWED_HOSTS':''}); local_image('registry.example/base:9',{})
         with self.assertRaises(Error):local_image('registry.example/base:latest',{'ALLOWED_HOSTS':''})
     def test_ca_bundle_blank_means_no_certs(self):
+        self.assertEqual(fetch_ca_bundle(self.root,{'TLS_CA_BUNDLE_URL':''}),[])
+        for name in ('tls-ca-bundle.zip','tls-ca-bundle.pem'): self.assertEqual((self.root/'generated/trust'/name).stat().st_size,0)
         (self.root/'config').mkdir()
-        self.assertIsNone(fetch_ca_bundle(self.root,{'TLS_CA_BUNDLE_URL':''}))
-        self.assertEqual((self.root/'config/tls-ca-bundle.zip').stat().st_size,0)
         with zipfile.ZipFile(self.root/'config/tls-ca-bundle.zip','w') as z: z.writestr('readme.txt','no certs')
         with self.assertRaises(Error):fetch_ca_bundle(self.root,{})
         with zipfile.ZipFile(self.root/'config/tls-ca-bundle.zip','w') as z: z.writestr('certs/root-ca.pem','-----BEGIN CERTIFICATE-----')
-        self.assertEqual(fetch_ca_bundle(self.root,{}),self.root/'config/tls-ca-bundle.zip')
+        (self.root/'config/tls-ca-bundle.pem').write_text('-----BEGIN CERTIFICATE-----\nx\n-----END CERTIFICATE-----\n')
+        self.assertEqual(fetch_ca_bundle(self.root,{}),['zip','pem'])
+        self.assertTrue((self.root/'generated/trust/tls-ca-bundle.pem').stat().st_size)
         with self.assertRaises(Error):fetch_ca_bundle(self.root,{'TLS_CA_BUNDLE_URL':'ftp://x/y.zip'})
+    def test_ca_bundle_download_failure_is_explicit(self):
+        unreachable='http://127.0.0.1:9/tls-ca-bundle.zip'
+        with self.assertRaises(Error):fetch_ca_bundle(self.root,{'TLS_CA_BUNDLE_URL':unreachable})
+        (self.root/'config').mkdir(exist_ok=True)
+        with zipfile.ZipFile(self.root/'config/tls-ca-bundle.zip','w') as z: z.writestr('ca.crt','-----BEGIN CERTIFICATE-----')
+        self.assertEqual(fetch_ca_bundle(self.root,{'TLS_CA_BUNDLE_URL':unreachable}),['zip'])
     def test_proxy_blank_means_none(self):
         self.assertEqual(proxy_args({'HTTP_PROXY':'','HTTPS_PROXY':''}),{})
         self.assertEqual(proxy_args({'HTTPS_PROXY':'http://proxy.example:3128','NO_PROXY':'localhost'}),

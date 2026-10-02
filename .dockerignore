@@ -8,5 +8,5 @@ dist
 *.zip
 *.part
 generated
+!generated/trust
 config
-!config/tls-ca-bundle.zip

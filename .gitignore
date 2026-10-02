@@ -12,6 +12,7 @@ clearml/
 clearml-server/
 clearml-web/
 clearml-agent/
+config/tls-ca-bundle.pem
 config/tls-ca-bundle.zip
 config/pip.conf
 config/npmrc

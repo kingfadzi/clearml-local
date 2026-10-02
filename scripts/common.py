@@ -93,32 +93,61 @@ def local_image(image, env):
         raise Error('Use a versioned image tag or digest')
 
 def fetch_ca_bundle(root, env):
-    """Stage config/tls-ca-bundle.zip for image builds. Blank URL and no file means no private CA (empty placeholder)."""
+    """Stage generated/trust/{tls-ca-bundle.zip,tls-ca-bundle.pem} for image builds.
+    Blank URL and no local files means no private CA (empty placeholders). A manually placed
+    config/tls-ca-bundle.pem bootstraps the download when the download host uses the private CA."""
+    import ssl
+    import urllib.error
     import urllib.request
     import zipfile
-    target = root / 'config/tls-ca-bundle.zip'
+    config = root / 'config'
+    zip_path, pem_path = config / 'tls-ca-bundle.zip', config / 'tls-ca-bundle.pem'
+    staged = root / 'generated/trust'
+    staged.mkdir(parents=True, exist_ok=True)
     url = env.get('TLS_CA_BUNDLE_URL', '')
     if url:
         if urlparse(url).scheme not in ('http', 'https'):
             raise Error('TLS_CA_BUNDLE_URL must be an http(s) URL')
-        proxies = {k.lower().replace('_proxy', ''): v for k, v in proxy_args(env).items() if k.islower() and k != 'no_proxy'}
-        opener = urllib.request.build_opener(urllib.request.ProxyHandler(proxies))
-        temporary = target.with_suffix('.zip.part')
-        target.parent.mkdir(parents=True, exist_ok=True)
-        with opener.open(url, timeout=60) as response, temporary.open('wb') as output:
-            shutil.copyfileobj(response, output)
-        temporary.replace(target)
-    if target.exists() and target.stat().st_size:
+        proxies = {k[:-6]: v for k, v in proxy_args(env).items() if k.islower() and k != 'no_proxy'}
+        context = ssl.create_default_context()
+        if pem_path.is_file() and pem_path.stat().st_size:
+            context.load_verify_locations(cafile=str(pem_path))
+        opener = urllib.request.build_opener(urllib.request.ProxyHandler(proxies), urllib.request.HTTPSHandler(context=context))
+        temporary = zip_path.with_suffix('.zip.part')
+        config.mkdir(parents=True, exist_ok=True)
         try:
-            names = zipfile.ZipFile(target).namelist()
+            with opener.open(url, timeout=60) as response, temporary.open('wb') as output:
+                shutil.copyfileobj(response, output)
+            temporary.replace(zip_path)
+        except (urllib.error.URLError, OSError, ValueError) as error:
+            temporary.unlink(missing_ok=True)
+            reason = getattr(error, 'reason', error)
+            if zip_path.is_file() and zip_path.stat().st_size:
+                print(f'WARNING: could not download the CA bundle ({type(reason).__name__ if not isinstance(reason, str) else reason}); using the existing config/tls-ca-bundle.zip')
+            else:
+                raise Error('Could not download TLS_CA_BUNDLE_URL. If that host uses the private CA, place the CA as '
+                            'config/tls-ca-bundle.pem (it is inside the zip) and retry, or copy the zip to config/tls-ca-bundle.zip')
+    have = []
+    if zip_path.is_file() and zip_path.stat().st_size:
+        try:
+            names = zipfile.ZipFile(zip_path).namelist()
         except zipfile.BadZipFile:
             raise Error('config/tls-ca-bundle.zip is not a zip archive')
         if not any(n.lower().endswith(('.pem', '.crt', '.cer')) for n in names):
             raise Error('CA bundle contains no .pem/.crt/.cer certificates')
-        return target
-    target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_bytes(b'')
-    return None
+        shutil.copyfile(zip_path, staged / 'tls-ca-bundle.zip')
+        have.append('zip')
+    else:
+        (staged / 'tls-ca-bundle.zip').write_bytes(b'')
+    if pem_path.is_file() and pem_path.stat().st_size:
+        if 'BEGIN CERTIFICATE' not in pem_path.read_text(errors='replace'):
+            raise Error('config/tls-ca-bundle.pem holds no PEM certificate')
+        shutil.copyfile(pem_path, staged / 'tls-ca-bundle.pem')
+        have.append('pem')
+    else:
+        (staged / 'tls-ca-bundle.pem').write_bytes(b'')
+    print('CA material staged: ' + (', '.join(have) if have else 'none (system trust)'))
+    return have
 
 def proxy_args(env):
     """Blank proxy settings mean no proxy. Both cases are passed; dnf, pip, curl and npm differ."""

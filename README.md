@@ -27,7 +27,9 @@
 - `vm.max_map_count >= 262144` on the host that runs the database stack.
 - Builder images: `almalinux9-python:3.11` and `almalinux9-node:24` from the `builder-images` repository (Node 24, pnpm 10).
 - Base and builder images are pulled from their registry when not present locally. Tags must be versioned (`:latest` is rejected) and, when `ALLOWED_HOSTS` is set, from a listed registry.
-- `TLS_CA_BUNDLE_URL`: URL of a zip holding the internally signed CA certificates (`.pem`/`.crt`/`.cer`, any folder layout). Blank means no private CA is required. The zip is downloaded to `config/tls-ca-bundle.zip` at build time and installed into the OS trust of every image stage. A zip placed there by hand is used when the URL is blank.
+- `TLS_CA_BUNDLE_URL`: URL of a zip holding the internally signed CA certificates (`.pem`/`.crt`/`.cer`, any folder layout). Blank means no private CA is required. `trust` or `build` downloads it to `config/tls-ca-bundle.zip`; every image stage installs it into OS trust.
+- Bootstrap: if the download host itself uses the private CA, place the CA by hand as `config/tls-ca-bundle.pem` (the same file is inside the zip). It is used to verify the download and is installed into the images as well.
+- Download failure: an already present `config/tls-ca-bundle.zip` is reused with a warning; otherwise the command stops and tells you to place the PEM or the zip. `./clearmlctl trust` stages and validates without building.
 
 ## Configuration
 
@@ -45,6 +47,7 @@
 
 ```sh
 ./clearmlctl prepare        # stage sources, write sources.lock.json
+./clearmlctl trust          # download/validate the CA bundle into generated/trust (optional, build does it too)
 ./clearmlctl dependencies   # resolve wheels into wheelhouse/ (refuses to overwrite)
 ./clearmlctl build          # server, web, agent, task images
 ./clearmlctl configure      # generated/ (secrets, mode 600)
@@ -86,7 +89,7 @@
 ## Transfer
 
 - `./clearmlctl bundle`: `dist/images.tar`, `dist/installer.tar.gz` (installer, sources, wheelhouse), `dist/checksums.json`.
-- Excluded: `.env`, `generated/`, `config/tls-ca-bundle.zip`, data volumes. Transfer site configuration separately.
+- Excluded: `.env`, `generated/`, `config/`, data volumes. Transfer site configuration separately.
 - Target: extract `installer.tar.gz`, place `images.tar` and `checksums.json` together, `./clearmlctl load --archive <path>`. A checksum mismatch refuses the archive.
 
 ## Verified (2026-10-02, lab)

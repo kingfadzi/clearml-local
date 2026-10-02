@@ -48,7 +48,7 @@ def image_map(env):
 
 def main():
     parser = argparse.ArgumentParser(description='ClearML source-based offline installer')
-    parser.add_argument('command', choices=['prepare','preflight','dependencies','build','configure','install','status','verify','bundle','load'])
+    parser.add_argument('command', choices=['prepare','trust','preflight','dependencies','build','configure','install','status','verify','bundle','load'])
     parser.add_argument('--env', default='.env')
     parser.add_argument('--archive', help='Image archive for load command')
     args = parser.parse_args()
@@ -56,6 +56,8 @@ def main():
     command = args.command
     if command == 'prepare':
         sources.prepare(ROOT, env)
+    elif command == 'trust':
+        fetch_ca_bundle(ROOT, env)
     elif command in ('dependencies','build'):
         build_args, secret_files = build_inputs(env)
         if command == 'dependencies':

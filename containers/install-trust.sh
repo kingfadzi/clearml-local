@@ -1,21 +1,28 @@
 #!/bin/sh
-# Install the staged CA bundle zip into OS trust. An empty or missing zip means no private CA is required.
+# Install staged CA material into OS trust: a bundle zip and/or a bootstrap PEM. Empty files mean nothing to add.
 set -eu
-BUNDLE=/tmp/tls-ca-bundle.zip
+ZIP=/tmp/trust/tls-ca-bundle.zip
+PEM=/tmp/trust/tls-ca-bundle.pem
 CERT_DIR=/tmp/tls-certs
-if [ -s "$BUNDLE" ]; then
+ANCHORS=/etc/pki/ca-trust/source/anchors
+count=0
+if [ -s "$ZIP" ]; then
     mkdir -p "$CERT_DIR"
-    python3 -m zipfile -e "$BUNDLE" "$CERT_DIR"
-    count=0
+    python3 -m zipfile -e "$ZIP" "$CERT_DIR"
     for cert in $(find "$CERT_DIR" -type f \( -name '*.pem' -o -name '*.crt' -o -name '*.cer' \)); do
-        cp "$cert" "/etc/pki/ca-trust/source/anchors/site-$(basename "$cert").crt"
+        cp "$cert" "$ANCHORS/site-$(basename "$cert").crt"
         count=$((count + 1))
     done
     [ "$count" -gt 0 ] || { echo "install-trust: bundle has no .pem/.crt/.cer certificates" >&2; exit 1; }
     rm -rf "$CERT_DIR"
-    update-ca-trust extract
+fi
+if [ -s "$PEM" ]; then
+    cp "$PEM" "$ANCHORS/site-bootstrap.crt"
+    count=$((count + 1))
+fi
+update-ca-trust extract
+if [ "$count" -gt 0 ]; then
     echo "install-trust: installed $count certificate file(s)"
 else
-    update-ca-trust extract
-    echo "install-trust: no CA bundle staged; using system trust"
+    echo "install-trust: no CA material staged; using system trust"
 fi
