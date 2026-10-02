@@ -28,7 +28,7 @@ class InstallerTests(unittest.TestCase):
         return {k:v.replace('CHANGE_ME','test-password-0123456789') for k,v in env.items()}
     def source(self):
         (self.root/'sources.json').write_text(json.dumps({'clearml-web': {'repository':'clearml/clearml-web','ref':'test'}}))
-        return self.root/'clearml-web-test.zip'
+        return self.root/'clearml-web-abcdef0.zip'
     def test_dotenv_is_literal(self):
         path = self.root/'.env'; path.write_text("VALUE='$(touch /tmp/never-run-this)'\n")
         self.assertEqual(env_file(path)['VALUE'],'$(touch /tmp/never-run-this)')
@@ -42,7 +42,7 @@ class InstallerTests(unittest.TestCase):
             network.assert_not_called()
     def test_zip_reused_and_tree_locked(self):
         path=self.source()
-        with zipfile.ZipFile(path,'w') as archive: archive.writestr('web-test/pnpm-lock.yaml','lockfileVersion: 9')
+        with zipfile.ZipFile(path,'w') as archive: archive.writestr('web-abcdef0/pnpm-lock.yaml','lockfileVersion: 9')
         with patch('urllib.request.urlopen') as network:
             sources.prepare(self.root,{'ALLOW_SOURCE_DOWNLOADS':'true'})
             sources.prepare(self.root,{'ALLOW_SOURCE_DOWNLOADS':'true'})
@@ -55,9 +55,26 @@ class InstallerTests(unittest.TestCase):
         with zipfile.ZipFile(archive,'w') as bundle: bundle.writestr('../escape','bad')
         with self.assertRaises(Error):sources.extract(archive,self.root/'out')
         self.assertFalse((self.root.parent/'escape').exists())
+    def test_symlink_inside_root_kept_and_escaping_symlink_rejected(self):
+        archive=self.source()
+        link=zipfile.ZipInfo('web-abcdef0/docs/example.py');link.external_attr=(0o120777<<16)
+        with zipfile.ZipFile(archive,'w') as bundle:
+            bundle.writestr('web-abcdef0/pnpm-lock.yaml','lockfileVersion: 9');bundle.writestr(link,'../pnpm-lock.yaml')
+        sources.prepare(self.root,{'ALLOW_SOURCE_DOWNLOADS':'false'});sources.verify(self.root)
+        self.assertEqual(os.readlink(self.root/'clearml-web/docs/example.py'),'../pnpm-lock.yaml')
+        shutil.rmtree(self.root/'clearml-web');archive.unlink();(self.root/'sources.lock.json').unlink()
+        link=zipfile.ZipInfo('web-abcdef0/escape');link.external_attr=(0o120777<<16)
+        with zipfile.ZipFile(archive,'w') as bundle: bundle.writestr(link,'../../etc/passwd')
+        with self.assertRaises(Error):sources.prepare(self.root,{'ALLOW_SOURCE_DOWNLOADS':'false'})
     def test_multiple_archives_rejected(self):
-        self.source().touch();(self.root/'clearml-web-other.zip').touch()
+        self.source().touch();(self.root/'clearml-web-0123abc.zip').touch()
         with self.assertRaises(Error):sources.prepare(self.root,{})
+    def test_archive_prefix_does_not_match_sibling_sources(self):
+        (self.root/'sources.json').write_text(json.dumps({'clearml': {'repository':'clearml/clearml','ref':'test'}}))
+        with zipfile.ZipFile(self.root/'clearml-0123abc.zip','w') as a: a.writestr('clearml/setup.py','')
+        (self.root/'clearml-server-0123abc.zip').touch();(self.root/'clearml-web-0123abc.zip').touch()
+        sources.prepare(self.root,{'ALLOW_SOURCE_DOWNLOADS':'false'})
+        self.assertTrue((self.root/'clearml/setup.py').is_file())
     def test_unlisted_yum_repo_rejected(self):
         path=self.root/'site.repo';path.write_text('[bad]\nbaseurl=https://other.example/repo\n')
         with self.assertRaises(Error):check_repos(self.root,{'YUM_REPO_FILE':'site.repo','ALLOWED_HOSTS':'yum.example'})

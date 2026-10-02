@@ -9,16 +9,34 @@ import urllib.request
 import zipfile
 from common import Error, boolean, sha, write_json
 
+def inside(root_relative_dir, target):
+    """True when a relative symlink target stays inside the source root."""
+    if PurePosixPath(target).is_absolute():
+        return False
+    depth = len(root_relative_dir.parts)
+    for part in PurePosixPath(target).parts:
+        if part == '..':
+            depth -= 1
+            if depth < 0:
+                return False
+        elif part != '.':
+            depth += 1
+    return True
+
 def tree_hash(root):
     import hashlib
     digest = hashlib.sha256()
     for path in sorted(root.rglob('*')):
-        if '.git' in path.relative_to(root).parts:
+        relative = path.relative_to(root)
+        if '.git' in relative.parts:
             continue
         if path.is_symlink():
-            raise Error(f'Source symlinks are unsupported: {path}')
-        if path.is_file():
-            digest.update(path.relative_to(root).as_posix().encode() + b'\0')
+            target = os.readlink(path)
+            if not inside(relative.parent, target):
+                raise Error(f'Source symlink escapes the source root: {path}')
+            digest.update(relative.as_posix().encode() + b'\0link:' + target.encode() + b'\0')
+        elif path.is_file():
+            digest.update(relative.as_posix().encode() + b'\0')
             digest.update(bytes.fromhex(sha(path)))
     return digest.hexdigest()
 
@@ -26,18 +44,27 @@ def extract(archive, target):
     with zipfile.ZipFile(archive) as bundle:
         infos = bundle.infolist()
         roots = set()
+        links = {}
         for item in infos:
             path = PurePosixPath(item.filename)
             if path.is_absolute() or '..' in path.parts or '\\' in item.filename:
                 raise Error('Unsafe ZIP member')
             if stat.S_ISLNK(item.external_attr >> 16):
-                raise Error('ZIP symlinks are unsupported')
+                link_target = bundle.read(item).decode()
+                if not inside(PurePosixPath(*path.parts[1:-1]), link_target):
+                    raise Error(f'ZIP symlink escapes the repository root: {item.filename}')
+                links[item.filename] = link_target
             if path.parts:
                 roots.add(path.parts[0])
         if len(roots) != 1:
             raise Error('ZIP must contain one repository root')
         with tempfile.TemporaryDirectory(dir=target.parent) as temporary:
             bundle.extractall(temporary)
+            # extractall writes symlink members as files holding the target text.
+            for name, link_target in links.items():
+                placeholder = Path(temporary) / name
+                placeholder.unlink()
+                os.symlink(link_target, placeholder)
             source = Path(temporary) / roots.pop()
             if not source.is_dir():
                 raise Error('ZIP repository root must be a directory')
@@ -58,7 +85,8 @@ def prepare(root, env):
                 raise Error(f'{name}: source differs from lock; review changes explicitly')
             record = previous or {'origin': 'local-directory', 'tree_sha256': fingerprint}
         else:
-            archives = sorted(root.glob(name + '-*.zip'))
+            # <name>-<hex revision>.zip; a plain glob would let clearml-*.zip match clearml-server-*.zip.
+            archives = sorted(p for p in root.glob(name + '-*.zip') if re.fullmatch(r'[0-9a-f]{7,40}', p.stem[len(name) + 1:]))
             if (root / (name + '.zip')).exists():
                 archives.append(root / (name + '.zip'))
             if len(archives) > 1:
