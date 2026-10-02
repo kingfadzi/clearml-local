@@ -27,7 +27,7 @@
 - `vm.max_map_count >= 262144` on the host that runs the database stack.
 - Builder images: `almalinux9-python:3.11` and `almalinux9-node:24` from the `builder-images` repository (Node 24, pnpm 10).
 - Base image present locally and tagged from an `ALLOWED_HOSTS` registry. `:latest` is rejected.
-- `config/ca.pem`: CA bundle trusted at build and run time (registries, package indexes, database TLS). Must be writable if you append a site CA.
+- `TLS_CA_BUNDLE_URL`: URL of a zip holding the internally signed CA certificates (`.pem`/`.crt`/`.cer`, any folder layout). Blank means no private CA is required. The zip is downloaded to `config/tls-ca-bundle.zip` at build time and installed into the OS trust of every image stage. A zip placed there by hand is used when the URL is blank.
 
 ## Configuration
 
@@ -86,7 +86,7 @@
 ## Transfer
 
 - `./clearmlctl bundle`: `dist/images.tar`, `dist/installer.tar.gz` (installer, sources, wheelhouse), `dist/checksums.json`.
-- Excluded: `.env`, `generated/`, `config/ca.pem`, data volumes. Transfer site configuration separately.
+- Excluded: `.env`, `generated/`, `config/tls-ca-bundle.zip`, data volumes. Transfer site configuration separately.
 - Target: extract `installer.tar.gz`, place `images.tar` and `checksums.json` together, `./clearmlctl load --archive <path>`. A checksum mismatch refuses the archive.
 
 ## Verified (2026-10-02, lab)
@@ -106,6 +106,6 @@
 
 - No firewall is provisioned. `BUILD_NETWORK` only selects a Docker build network. Enforce egress on the host.
 - Dependency policy checks declared sources (requirements, lockfiles, npmrc); it cannot stop arbitrary install scripts.
-- Changing `config/ca.pem` requires an image rebuild (CA is baked at build time).
+- Changing the CA bundle requires an image rebuild (trust is installed at build time).
 - Rotating database credentials or TLS files needs container restarts; this installer does not automate rotation or destructive migrations.
 - Upstream simple login mode has no password. Restrict network access to the UI or configure fixed users yourself.

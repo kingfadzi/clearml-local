@@ -12,7 +12,7 @@ from unittest.mock import patch
 import zipfile
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0,str(ROOT/'scripts'))
-from common import Error, env_file, local_image, proxy_args
+from common import Error, env_file, fetch_ca_bundle, local_image, proxy_args
 import sources
 from render import render
 
@@ -75,6 +75,15 @@ class InstallerTests(unittest.TestCase):
     def test_blank_allowlist_disables_registry_check(self):
         local_image('almalinux:9',{'ALLOWED_HOSTS':''}); local_image('registry.example/base:9',{})
         with self.assertRaises(Error):local_image('registry.example/base:latest',{'ALLOWED_HOSTS':''})
+    def test_ca_bundle_blank_means_no_certs(self):
+        (self.root/'config').mkdir()
+        self.assertIsNone(fetch_ca_bundle(self.root,{'TLS_CA_BUNDLE_URL':''}))
+        self.assertEqual((self.root/'config/tls-ca-bundle.zip').stat().st_size,0)
+        with zipfile.ZipFile(self.root/'config/tls-ca-bundle.zip','w') as z: z.writestr('readme.txt','no certs')
+        with self.assertRaises(Error):fetch_ca_bundle(self.root,{})
+        with zipfile.ZipFile(self.root/'config/tls-ca-bundle.zip','w') as z: z.writestr('certs/root-ca.pem','-----BEGIN CERTIFICATE-----')
+        self.assertEqual(fetch_ca_bundle(self.root,{}),self.root/'config/tls-ca-bundle.zip')
+        with self.assertRaises(Error):fetch_ca_bundle(self.root,{'TLS_CA_BUNDLE_URL':'ftp://x/y.zip'})
     def test_proxy_blank_means_none(self):
         self.assertEqual(proxy_args({'HTTP_PROXY':'','HTTPS_PROXY':''}),{})
         self.assertEqual(proxy_args({'HTTPS_PROXY':'http://proxy.example:3128','NO_PROXY':'localhost'}),

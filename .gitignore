@@ -12,7 +12,7 @@ clearml/
 clearml-server/
 clearml-web/
 clearml-agent/
-config/ca.pem
+config/tls-ca-bundle.zip
 config/pip.conf
 config/npmrc
 sources.lock.json

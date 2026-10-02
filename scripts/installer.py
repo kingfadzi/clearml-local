@@ -8,7 +8,7 @@ import subprocess
 import sys
 import tarfile
 import tempfile
-from common import Error, allowed_url, boolean, compose, docker_build, env_file, local_image, need, run, sha, write_json
+from common import Error, allowed_url, boolean, compose, docker_build, env_file, fetch_ca_bundle, local_image, need, run, sha, write_json
 import sources
 import dependency_policy
 from render import render
@@ -22,12 +22,7 @@ def build_inputs(env):
         run('docker', 'image', 'inspect', env[key], stdout=subprocess.DEVNULL)
     for key in ('PIP_INDEX_URL', 'NPM_REGISTRY'):
         allowed_url(need(env, key), env)
-    if not (ROOT / need(env, 'CA_BUNDLE')).is_file():
-        raise Error('CA_BUNDLE must exist; provide your site CA bundle')
-    # Canonical context location; do not rewrite a source file.
-    ca = ROOT / env['CA_BUNDLE']
-    if ca.resolve() != (ROOT / 'config/ca.pem').resolve():
-        shutil.copyfile(ca, ROOT / 'config/ca.pem')
+    fetch_ca_bundle(ROOT, env)
     args = {k: need(env,k) for k in ('RUNTIME_BASE_IMAGE', 'PYTHON_BUILDER_IMAGE', 'NODE_BUILDER_IMAGE', 'PIP_INDEX_URL', 'NPM_REGISTRY')}
     args['DOCKER_CLI_PACKAGE'] = need(env, 'DOCKER_CLI_PACKAGE')
     args['PIP_VERSION'] = env.get('PIP_VERSION') or '25.2'

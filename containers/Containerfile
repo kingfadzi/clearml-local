@@ -4,8 +4,9 @@ ARG NODE_BUILDER_IMAGE
 FROM ${PYTHON_BUILDER_IMAGE} AS python-resolve
 USER root
 WORKDIR /build
-COPY config/ca.pem /etc/pki/ca-trust/source/anchors/site.crt
-RUN update-ca-trust && python3.11 -c 'import sys; assert sys.version_info[:2] == (3,11)'
+COPY config/tls-ca-bundle.zip /tmp/tls-ca-bundle.zip
+COPY containers/install-trust.sh /tmp/install-trust.sh
+RUN sh /tmp/install-trust.sh && rm -f /tmp/tls-ca-bundle.zip /tmp/install-trust.sh && python3.11 -c 'import sys; assert sys.version_info[:2] == (3,11)'
 COPY clearml /build/clearml
 COPY clearml-agent /build/clearml-agent
 COPY clearml-server /build/clearml-server
@@ -21,8 +22,9 @@ COPY clearml-server /build/clearml-server
 
 FROM ${NODE_BUILDER_IMAGE} AS web-build
 USER root
-COPY config/ca.pem /etc/pki/ca-trust/source/anchors/site.crt
-RUN update-ca-trust && node -e 'if(process.versions.node.split(".")[0] !== "24")process.exit(1)' && pnpm --version | grep '^10\.'
+COPY config/tls-ca-bundle.zip /tmp/tls-ca-bundle.zip
+COPY containers/install-trust.sh /tmp/install-trust.sh
+RUN sh /tmp/install-trust.sh && rm -f /tmp/tls-ca-bundle.zip /tmp/install-trust.sh && node -e 'if(process.versions.node.split(".")[0] !== "24")process.exit(1)' && pnpm --version | grep '^10\.'
 WORKDIR /build/web
 COPY clearml-web /build/web
 ARG NPM_REGISTRY
@@ -34,9 +36,10 @@ RUN --mount=type=secret,id=npm_config \
 
 FROM ${RUNTIME_BASE_IMAGE} AS python-runtime
 USER root
-COPY config/ca.pem /etc/pki/ca-trust/source/anchors/site.crt
+COPY config/tls-ca-bundle.zip /tmp/tls-ca-bundle.zip
+COPY containers/install-trust.sh /tmp/install-trust.sh
 COPY containers/install-rpms.sh /tmp/install-rpms.sh
-RUN update-ca-trust
+RUN sh /tmp/install-trust.sh && rm -f /tmp/tls-ca-bundle.zip /tmp/install-trust.sh
 RUN sh /tmp/install-rpms.sh python3.11 python3.11-pip libstdc++ libgomp shadow-utils util-linux-core
 ARG PIP_VERSION
 COPY --from=python-build /wheelhouse /wheelhouse
@@ -71,9 +74,10 @@ CMD ["python"]
 
 FROM ${RUNTIME_BASE_IMAGE} AS web
 USER root
-COPY config/ca.pem /etc/pki/ca-trust/source/anchors/site.crt
+COPY config/tls-ca-bundle.zip /tmp/tls-ca-bundle.zip
+COPY containers/install-trust.sh /tmp/install-trust.sh
 COPY containers/install-rpms.sh /tmp/install-rpms.sh
-RUN update-ca-trust
+RUN sh /tmp/install-trust.sh && rm -f /tmp/tls-ca-bundle.zip /tmp/install-trust.sh
 RUN sh /tmp/install-rpms.sh nginx shadow-utils util-linux-core && useradd -u 1000 -m clearml
 COPY --from=web-build /build/web/build /usr/share/nginx/html
 COPY --from=web-build /build/web/dist/report-widgets /usr/share/nginx/widgets

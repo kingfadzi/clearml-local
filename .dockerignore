@@ -9,4 +9,4 @@ dist
 *.part
 generated
 config
-!config/ca.pem
+!config/tls-ca-bundle.zip

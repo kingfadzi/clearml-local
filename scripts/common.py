@@ -2,6 +2,7 @@
 import hashlib
 import json
 import os
+import shutil
 from pathlib import Path
 import re
 import subprocess
@@ -90,6 +91,34 @@ def local_image(image, env):
         raise Error(f"Image registry is not in ALLOWED_HOSTS: {image}")
     if ':latest' in image or (':' not in image.rsplit('/', 1)[-1] and '@sha256:' not in image):
         raise Error('Use a versioned image tag or digest')
+
+def fetch_ca_bundle(root, env):
+    """Stage config/tls-ca-bundle.zip for image builds. Blank URL and no file means no private CA (empty placeholder)."""
+    import urllib.request
+    import zipfile
+    target = root / 'config/tls-ca-bundle.zip'
+    url = env.get('TLS_CA_BUNDLE_URL', '')
+    if url:
+        if urlparse(url).scheme not in ('http', 'https'):
+            raise Error('TLS_CA_BUNDLE_URL must be an http(s) URL')
+        proxies = {k.lower().replace('_proxy', ''): v for k, v in proxy_args(env).items() if k.islower() and k != 'no_proxy'}
+        opener = urllib.request.build_opener(urllib.request.ProxyHandler(proxies))
+        temporary = target.with_suffix('.zip.part')
+        target.parent.mkdir(parents=True, exist_ok=True)
+        with opener.open(url, timeout=60) as response, temporary.open('wb') as output:
+            shutil.copyfileobj(response, output)
+        temporary.replace(target)
+    if target.exists() and target.stat().st_size:
+        try:
+            names = zipfile.ZipFile(target).namelist()
+        except zipfile.BadZipFile:
+            raise Error('config/tls-ca-bundle.zip is not a zip archive')
+        if not any(n.lower().endswith(('.pem', '.crt', '.cer')) for n in names):
+            raise Error('CA bundle contains no .pem/.crt/.cer certificates')
+        return target
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(b'')
+    return None
 
 def proxy_args(env):
     """Blank proxy settings mean no proxy. Both cases are passed; dnf, pip, curl and npm differ."""
