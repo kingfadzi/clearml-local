@@ -6,7 +6,7 @@ Last updated: 2026-10-02. Workspace: `/home/fadzi/tools/clearML`.
 
 - All three deliverables are published and end-to-end tested in the lab.
 - Installer: `staging/clearml-local` (this directory, branch `main`).
-- Database stack: `staging/data-services` (checkout at `repositories/data-services`, ignored by the installer repo).
+- Database stack: `staging/data-services` (checkout at `repositories/data-services`, ignored by the installer repo). Its host is locked down: `datactl` is bash driving `docker compose`; rendering runs in a container from the base image; a static `compose.yaml` is interpolated from `.env` and `generated/compose.env`.
 - Builder images: `staging/builder-images` `main`, checkout at `/home/fadzi/tools/builder-images`. Added `almalinux9-node:24` (pnpm 10.11.0) and `almalinux9-python:3.11`, both pushed to the lab registry.
 - `README.md` in each repository lists verified behaviour and limitations. Lab `.env`, `config/ca.pem`, `config/yum*.repo`, `.env.ubi9` and TLS files are untracked site configuration on this host.
 

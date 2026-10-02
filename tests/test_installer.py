@@ -15,9 +15,6 @@ sys.path.insert(0,str(ROOT/'scripts'))
 from common import Error, env_file, check_repos, local_image
 import sources
 from render import render
-loader = importlib.machinery.SourceFileLoader('datactl',str(ROOT/'repositories/data-services/datactl'))
-spec = importlib.util.spec_from_loader(loader.name,loader)
-datactl = importlib.util.module_from_spec(spec); loader.exec_module(datactl)
 
 class InstallerTests(unittest.TestCase):
     def setUp(self):
@@ -148,31 +145,9 @@ class InstallerTests(unittest.TestCase):
         env = self.clearml_env()
         env['ELASTICSEARCH_URLS'] = 'https://secure:9243/?token=secret'
         with self.assertRaises(Error): render(self.root, env)
-    def test_data_credentials_stable_and_exported(self):
-        env=env_file(ROOT/'repositories/data-services/.env.example')
-        with patch.object(datactl,'ROOT',self.root):
-            datactl.configure(env)
-            first=(self.root/'generated/credentials.json').read_bytes()
-            datactl.configure(env)
-            self.assertEqual(first,(self.root/'generated/credentials.json').read_bytes())
-            connection=env_file(self.root/'generated/clearml.env')
-            self.assertIn('/backend?authSource=admin',connection['MONGO_BACKEND_URI'])
-            self.assertEqual(set(json.loads((self.root/'generated/compose.json').read_text())['services']),{'elasticsearch','mongo','redis'})
-    def test_data_credentials_cannot_silently_rotate(self):
-        env=env_file(ROOT/'repositories/data-services/.env.example')
-        with patch.object(datactl,'ROOT',self.root):
-            datactl.configure(env);env['REDIS_PASSWORD']='a-different-password'
-            with self.assertRaises(Error):datactl.configure(env)
-    def test_tls_missing_certificates_fails(self):
-        env=env_file(ROOT/'repositories/data-services/.env.example');env['TLS_ENABLED']='true'
-        with patch.object(datactl,'ROOT',self.root):
-            with self.assertRaises(Error):datactl.configure(env)
     @unittest.skipUnless(shutil.which('docker'),'Docker CLI required (daemon not needed)')
     def test_compose_models_valid(self):
         render(self.root,self.clearml_env())
-        subprocess.run(['docker','compose','-f',str(self.root/'generated/compose.json'),'config','--quiet'],check=True)
-        env=env_file(ROOT/'repositories/data-services/.env.example')
-        with patch.object(datactl,'ROOT',self.root):datactl.configure(env)
         subprocess.run(['docker','compose','-f',str(self.root/'generated/compose.json'),'config','--quiet'],check=True)
 
 class DockerPolicyTests(unittest.TestCase):
