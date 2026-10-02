@@ -96,6 +96,14 @@ class InstallerTests(unittest.TestCase):
         env=self.clearml_env();render(self.root,env)
         path=self.root/'generated/config/secure.conf';first=path.read_bytes()
         render(self.root,env);self.assertEqual(first,path.read_bytes());self.assertEqual(path.stat().st_mode & 0o777,0o600)
+    def test_shared_config_covers_fileserver_and_replaces_default_credentials(self):
+        env=self.clearml_env();render(self.root,env)
+        hosts=json.loads((self.root/'generated/config/hosts.conf').read_text())
+        secure=json.loads((self.root/'generated/config/secure.conf').read_text())
+        self.assertEqual(hosts['redis']['fileserver']['db'],8);self.assertEqual(hosts['api_server'],'http://apiserver:8008')
+        self.assertEqual(secure['redis']['fileserver']['password'],env['REDIS_PASSWORD'])
+        self.assertEqual(set(secure['credentials']),{'apiserver','fileserver','webserver','services_agent','tests'})
+        self.assertNotIn('62T8CP7HGBC6647XF9314C2VY67RJO',json.dumps(secure))
     def test_configuration_escapes_password(self):
         env=self.clearml_env();env['REDIS_PASSWORD']='x"\\${hello}'
         render(self.root,env)

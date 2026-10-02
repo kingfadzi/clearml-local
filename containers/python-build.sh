@@ -3,6 +3,8 @@ set -eu
 export PIP_CONFIG_FILE=/dev/null
 if [ -f /run/secrets/pip_config ]; then export PIP_CONFIG_FILE=/run/secrets/pip_config; fi
 export PIP_EXTRA_INDEX_URL= PIP_FIND_LINKS= PIP_INDEX_URL
+# Pinned build tooling; the EL9 pip cannot build setup.py projects without wheel.
+python3.11 -m pip install --upgrade "pip==${PIP_VERSION:-25.2}" "setuptools==${SETUPTOOLS_VERSION:-80.9.0}" "wheel==${WHEEL_VERSION:-0.45.1}"
 # ClearML packages are always built from the staged sources.
 mkdir -p /wheelhouse
 python3.11 -m pip wheel --no-deps -w /wheelhouse /build/clearml /build/clearml-agent

@@ -14,9 +14,13 @@ def render(root, env):
     else:
         secure = {'http': {'session_secret': {'apiserver': secrets.token_urlsafe(48)}},
                   'auth': {'token_secret': secrets.token_urlsafe(48)},
+                  # Every upstream default credential is replaced so no published secret stays valid.
                   'credentials': {name: {'user_key': secrets.token_hex(16), 'user_secret': secrets.token_urlsafe(48),
                                          'role': 'admin' if name == 'services_agent' else 'system'}
-                                  for name in ('apiserver', 'fileserver', 'services_agent')}}
+                                  for name in ('apiserver', 'fileserver', 'webserver', 'services_agent')}}
+        secure['credentials']['webserver']['revoke_in_fixed_mode'] = True
+        secure['credentials']['tests'] = {'role': 'user', 'display_name': 'Default User', 'user_key': secrets.token_hex(16),
+                                          'user_secret': secrets.token_urlsafe(48), 'revoke_in_fixed_mode': True}
     agent = secure['credentials']['services_agent']
     key, secret = env.get('CLEARML_AGENT_ACCESS_KEY'), env.get('CLEARML_AGENT_SECRET_KEY')
     if bool(key) != bool(secret):
@@ -24,7 +28,7 @@ def render(root, env):
     if key:
         agent.update(user_key=key, user_secret=secret)
     secure['elastic'] = {'user': need(env, 'ELASTICSEARCH_USERNAME'), 'password': need(env, 'ELASTICSEARCH_PASSWORD')}
-    secure['redis'] = {name: {'password': need(env, 'REDIS_PASSWORD')} for name in ('apiserver', 'workers')}
+    secure['redis'] = {name: {'password': need(env, 'REDIS_PASSWORD')} for name in ('apiserver', 'workers', 'fileserver')}
     write_json(secure_path, secure)
     elastic = []
     for url in need(env, 'ELASTICSEARCH_URLS').split(','):
@@ -42,8 +46,10 @@ def render(root, env):
     es_args = {}
     hosts = {'mongo': {'backend': {'host': need(env, 'MONGO_BACKEND_URI')}, 'auth': {'host': need(env, 'MONGO_AUTH_URI')}},
              'elastic': {name: {'hosts': elastic, 'args': es_args} for name in ('events', 'workers')},
+             # The fileserver shares this directory and reads the fileserver alias plus api_server.
              'redis': {name: {'host': need(env, 'REDIS_HOST'), 'port': int(need(env, 'REDIS_PORT')), 'db': db}
-                       for name, db in [('apiserver', 0), ('workers', 4)]}, 'fileserver': 'http://fileserver:8081'}
+                       for name, db in [('apiserver', 0), ('workers', 4), ('fileserver', 8)]},
+             'fileserver': 'http://fileserver:8081', 'api_server': 'http://apiserver:8008'}
     if boolean(env, 'REDIS_TLS'):
         for value in hosts['redis'].values():
             value.update(ssl=True, ssl_ca_certs='/etc/pki/tls/certs/ca-bundle.crt', ssl_cert_reqs='required')
