@@ -104,6 +104,14 @@ class InstallerTests(unittest.TestCase):
         self.assertEqual(secure['redis']['fileserver']['password'],env['REDIS_PASSWORD'])
         self.assertEqual(set(secure['credentials']),{'apiserver','fileserver','webserver','services_agent','tests'})
         self.assertNotIn('62T8CP7HGBC6647XF9314C2VY67RJO',json.dumps(secure))
+    def test_agent_service_stays_offline(self):
+        env=self.clearml_env();services=render(self.root,env);agent=services['agent-services']
+        self.assertIn('--cpu-only',agent['command'])
+        self.assertEqual(agent['environment']['CLEARML_AGENT_DOCKER_HOST_MOUNT'],env['AGENT_WORK_DIR']+':/root/.clearml')
+        self.assertTrue(agent['environment']['CLEARML_AGENT_DOCKER_AGENT_REPO'].startswith('--no-index'))
+        conf=json.loads((self.root/'generated/agent.conf').read_text())
+        self.assertEqual(conf['agent']['package_manager']['pip_version'],'=='+env['PIP_VERSION'])
+        self.assertIn('--pull=never',conf['agent']['extra_docker_arguments'])
     def test_configuration_escapes_password(self):
         env=self.clearml_env();env['REDIS_PASSWORD']='x"\\${hello}'
         render(self.root,env)

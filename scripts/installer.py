@@ -31,6 +31,7 @@ def build_inputs(env):
         shutil.copyfile(ca, ROOT / 'config/ca.pem')
     args = {k: need(env,k) for k in ('RUNTIME_BASE_IMAGE', 'PYTHON_BUILDER_IMAGE', 'NODE_BUILDER_IMAGE', 'PIP_INDEX_URL', 'NPM_REGISTRY')}
     args['DOCKER_CLI_PACKAGE'] = need(env, 'DOCKER_CLI_PACKAGE')
+    args['PIP_VERSION'] = env.get('PIP_VERSION') or '25.2'
     secrets = {'yum_repo': ROOT / env['YUM_REPO_FILE'] if env.get('YUM_REPO_FILE') else None}
     for key, name in [('PIP_CONFIG_FILE','pip_config'), ('NPM_CONFIG_FILE','npm_config')]:
         if env.get(key):

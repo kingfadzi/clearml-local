@@ -86,13 +86,16 @@ def render(root, env):
             raise Error('AGENT_WORK_DIR must be an absolute host path for sibling task containers')
         agent_config = {'api': {'api_server': need(env, 'CLEARML_API_URL'), 'web_server': need(env, 'CLEARML_WEB_URL'),
                                 'files_server': need(env, 'CLEARML_FILES_URL'), 'credentials': {'access_key': agent['user_key'], 'secret_key': agent['user_secret']}},
-                        'agent': {'package_manager': {'type': 'pip', 'pip_version': '==24.3.1', 'pytorch_resolve': 'none', 'extra_index_url': []}, 'docker_force_pull': False,
-                                  'default_docker': {'image': need(env, 'TASK_IMAGE'), 'match_rules': []}, 'disable_ssh_mount': True, 'docker_install_opencv_libs': False, 'docker_init_bash_script': ['test -x /opt/venv/bin/python'], 'bootstrap': {'use_bootstrap': False, 'check_for_latest': False}, 'extra_docker_arguments': ['--pull=never', '-e', 'PIP_INDEX_URL=' + need(env, 'PIP_INDEX_URL'), '-e', 'PIP_EXTRA_INDEX_URL=', '-e', 'PIP_DISABLE_PIP_VERSION_CHECK=1']}}
+                        'agent': {'package_manager': {'type': 'pip', 'pip_version': '==' + (env.get('PIP_VERSION') or '25.2'), 'pytorch_resolve': 'none', 'extra_index_url': []}, 'docker_force_pull': False,
+                                  'default_docker': {'image': need(env, 'TASK_IMAGE'), 'match_rules': []}, 'disable_ssh_mount': True, 'docker_install_opencv_libs': False, 'docker_init_bash_script': ['test -x /opt/venv/bin/python'], 'bootstrap': {'use_bootstrap': False, 'check_for_latest': False}, 'extra_docker_arguments': ['--pull=never', '-e', 'PIP_INDEX_URL=' + need(env, 'PIP_INDEX_URL'), '-e', 'PIP_EXTRA_INDEX_URL=', '-e', 'PIP_DISABLE_PIP_VERSION_CHECK=1', '-e', 'CLEARML_AGENT_SKIP_PYTHON_ENV_INSTALL=1']}}
         write_json(generated / 'agent.conf', agent_config)
         services['agent-services'] = {'image': need(env, 'AGENT_IMAGE'), 'pull_policy': 'never', 'restart': 'unless-stopped',
-            'command': ['daemon', '--foreground', '--services-mode', '--queue', 'services', '--docker', need(env, 'TASK_IMAGE')],
+            'command': ['daemon', '--foreground', '--services-mode', '--cpu-only', '--queue', 'services', '--docker', need(env, 'TASK_IMAGE')],
             'depends_on': {'apiserver': {'condition': 'service_healthy'}},
-            'environment': {'CLEARML_CONFIG_FILE': '/etc/clearml.conf', 'CLEARML_AGENT_DOCKER_HOST_MOUNT': work,
+            # host:container mapping lets sibling task containers mount the agent's work files.
+            'environment': {'CLEARML_CONFIG_FILE': '/etc/clearml.conf', 'CLEARML_AGENT_DOCKER_HOST_MOUNT': f'{work}:/root/.clearml',
+                            'CLEARML_AGENT_DOCKER_AGENT_REPO': '--no-index --find-links=/opt/wheels clearml-agent',
+                            'CLEARML_AGENT_SKIP_PIP_VENV_INSTALL': '/opt/venv/bin/python',
                             'PIP_INDEX_URL': need(env, 'PIP_INDEX_URL'), 'PIP_EXTRA_INDEX_URL': '', 'PIP_DISABLE_PIP_VERSION_CHECK': '1',
                             'CLEARML_AGENT_DOCKER_IMAGE': need(env, 'TASK_IMAGE'), 'OFFLINE_TASK_IMAGE': need(env, 'TASK_IMAGE')},
             'volumes': [f'{generated.resolve()}/agent.conf:/etc/clearml.conf:ro,z',

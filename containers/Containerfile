@@ -11,6 +11,7 @@ COPY clearml-agent /build/clearml-agent
 COPY clearml-server /build/clearml-server
 COPY containers/python-build.sh /build/python-build.sh
 ARG PIP_INDEX_URL
+ARG PIP_VERSION
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1 PIP_NO_INPUT=1 PIP_CERT=/etc/pki/tls/certs/ca-bundle.crt
 RUN --mount=type=secret,id=pip_config sh /build/python-build.sh
 
@@ -37,8 +38,10 @@ COPY config/ca.pem /etc/pki/ca-trust/source/anchors/site.crt
 COPY containers/install-rpms.sh /tmp/install-rpms.sh
 RUN update-ca-trust
 RUN --mount=type=secret,id=yum_repo sh /tmp/install-rpms.sh python3.11 python3.11-pip libstdc++ libgomp shadow-utils util-linux-core
+ARG PIP_VERSION
 COPY --from=python-build /wheelhouse /wheelhouse
-RUN python3.11 -m venv /opt/venv && /opt/venv/bin/pip install --no-index --find-links=/wheelhouse --require-hashes -r /wheelhouse/requirements.lock && rm -rf /wheelhouse && \
+RUN python3.11 -m venv /opt/venv && /opt/venv/bin/pip install --no-index --find-links=/wheelhouse "pip==${PIP_VERSION}" && \
+    /opt/venv/bin/pip install --no-index --find-links=/wheelhouse --require-hashes -r /wheelhouse/requirements.lock && rm -rf /wheelhouse && \
     useradd -u 1000 -m clearml
 ENV PATH=/opt/venv/bin:$PATH PYTHONUNBUFFERED=1 CLEARML_CONFIG_DIR=/opt/clearml/config \
     SSL_CERT_FILE=/etc/pki/tls/certs/ca-bundle.crt REQUESTS_CA_BUNDLE=/etc/pki/tls/certs/ca-bundle.crt PIP_CERT=/etc/pki/tls/certs/ca-bundle.crt
@@ -62,6 +65,8 @@ RUN chmod +x /usr/local/bin/docker
 ENTRYPOINT ["clearml-agent"]
 
 FROM python-runtime AS task
+# The agent reinstalls itself inside task containers; serve that from a local wheel directory.
+COPY --from=python-build /wheelhouse/clearml_agent-*.whl /wheelhouse/clearml-*.whl /opt/wheels/
 CMD ["python"]
 
 FROM ${RUNTIME_BASE_IMAGE} AS web

@@ -8,6 +8,8 @@ python3.11 -m pip install --upgrade "pip==${PIP_VERSION:-25.2}" "setuptools==${S
 # ClearML packages are always built from the staged sources.
 mkdir -p /wheelhouse
 python3.11 -m pip wheel --no-deps -w /wheelhouse /build/clearml /build/clearml-agent
+# Runtime venvs pin the same pip so the agent's in-container pip upgrade is already satisfied.
+python3.11 -m pip wheel --no-deps -w /wheelhouse "pip==${PIP_VERSION:-25.2}"
 python3.11 -m pip wheel --find-links=/wheelhouse -w /wheelhouse -r /build/clearml-server/apiserver/requirements.txt /wheelhouse/clearml-*.whl /wheelhouse/clearml_agent-*.whl
 python3.11 - <<'PY'
 from pathlib import Path
