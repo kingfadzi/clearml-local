@@ -23,7 +23,7 @@ def build_inputs(env):
         allowed_url(need(env, key), env)
     fetch_ca_bundle(ROOT, env)
     args = {k: need(env,k) for k in ('BASE_IMAGE', 'PIP_INDEX_URL', 'NPM_REGISTRY')}
-    args['NODE_PACKAGE'] = env.get('NODE_PACKAGE') or '@nodejs:22/common'
+    args['NODE_PACKAGE'] = env.get('NODE_PACKAGE') or '@nodejs:24/common'
     args['PNPM_VERSION'] = env.get('PNPM_VERSION') or '10'
     args['DOCKER_CLI_PACKAGE'] = need(env, 'DOCKER_CLI_PACKAGE')
     args['PIP_VERSION'] = env.get('PIP_VERSION') or '25.2'
