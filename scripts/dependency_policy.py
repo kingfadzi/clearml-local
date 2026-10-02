@@ -23,10 +23,17 @@ def check(root, env):
             if value.startswith(('git:','git+','github:','gitlab:','bitbucket:')):
                 raise Error('Frontend Git dependency is forbidden')
             if value.startswith(('http://','https://')): allowed_url(value,env)
+    npmrc=root/'clearml-web/.npmrc'
+    if npmrc.exists():
+        for line in npmrc.read_text().splitlines():
+            key,sep,value=line.partition('=')
+            if sep and key.strip().endswith('registry'): allowed_url(value.strip(),env)
+            if sep and key.strip() in ('_auth','_authToken') or ':_authToken' in key: raise Error('Frontend .npmrc must not embed credentials')
     for line in (root/'clearml-web/pnpm-lock.yaml').read_text().splitlines():
         if 'tarball:' in line:
             for url in re.findall(r'https?://[^\s,}\"\']+',line): allowed_url(url,env)
-        if 'git+' in line or 'git@' in line:
+        # Package names such as @npmcli/git@7.0.1 are not Git URLs.
+        if re.search(r"git\+|git@[\w.-]+:|\bgit://", line):
             raise Error('Frontend lock contains a Git dependency')
     if env.get('PIP_CONFIG_FILE'):
         parser=configparser.ConfigParser(interpolation=None);parser.read(root/env['PIP_CONFIG_FILE'])

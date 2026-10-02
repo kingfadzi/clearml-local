@@ -27,7 +27,6 @@ COPY clearml-web /build/web
 ARG NPM_REGISTRY
 ENV NODE_EXTRA_CA_CERTS=/etc/pki/tls/certs/ca-bundle.crt PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 CYPRESS_INSTALL_BINARY=0
 RUN --mount=type=secret,id=npm_config \
-    rm -f .npmrc && \
     if [ -f /run/secrets/npm_config ]; then cp /run/secrets/npm_config /tmp/npmrc; else touch /tmp/npmrc; fi && \
     NPM_CONFIG_USERCONFIG=/tmp/npmrc pnpm install --registry="$NPM_REGISTRY" --frozen-lockfile && \
     rm -f /tmp/npmrc && pnpm run build && pnpm run build-widgets
@@ -37,7 +36,7 @@ USER root
 COPY config/ca.pem /etc/pki/ca-trust/source/anchors/site.crt
 COPY containers/install-rpms.sh /tmp/install-rpms.sh
 RUN update-ca-trust
-RUN --mount=type=secret,id=yum_repo sh /tmp/install-rpms.sh python3.11 python3.11-pip libstdc++ libgomp shadow-utils util-linux-core curl
+RUN --mount=type=secret,id=yum_repo sh /tmp/install-rpms.sh python3.11 python3.11-pip libstdc++ libgomp shadow-utils util-linux-core
 COPY --from=python-build /wheelhouse /wheelhouse
 RUN python3.11 -m venv /opt/venv && /opt/venv/bin/pip install --no-index --find-links=/wheelhouse --require-hashes -r /wheelhouse/requirements.lock && rm -rf /wheelhouse && \
     useradd -u 1000 -m clearml
@@ -70,7 +69,7 @@ USER root
 COPY config/ca.pem /etc/pki/ca-trust/source/anchors/site.crt
 COPY containers/install-rpms.sh /tmp/install-rpms.sh
 RUN update-ca-trust
-RUN --mount=type=secret,id=yum_repo sh /tmp/install-rpms.sh nginx shadow-utils util-linux-core curl && useradd -u 1000 -m clearml
+RUN --mount=type=secret,id=yum_repo sh /tmp/install-rpms.sh nginx shadow-utils util-linux-core && useradd -u 1000 -m clearml
 COPY --from=web-build /build/web/build /usr/share/nginx/html
 COPY --from=web-build /build/web/dist/report-widgets /usr/share/nginx/widgets
 COPY containers/nginx.conf /etc/nginx/nginx.conf
