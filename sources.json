@@ -1,0 +1,6 @@
+{
+  "clearml-server": {"repository": "clearml/clearml-server", "ref": "v2.4.0"},
+  "clearml-web": {"repository": "clearml/clearml-web", "ref": "v2.5"},
+  "clearml-agent": {"repository": "clearml/clearml-agent", "ref": "v3.0.3"},
+  "clearml": {"repository": "clearml/clearml", "ref": "v2.1.12"}
+}

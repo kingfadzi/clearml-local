@@ -1,0 +1,82 @@
+ARG RUNTIME_BASE_IMAGE
+ARG PYTHON_BUILDER_IMAGE
+ARG NODE_BUILDER_IMAGE
+FROM ${PYTHON_BUILDER_IMAGE} AS python-resolve
+USER root
+WORKDIR /build
+COPY config/ca.pem /etc/pki/ca-trust/source/anchors/site.crt
+RUN update-ca-trust && python3.11 -c 'import sys; assert sys.version_info[:2] == (3,11)'
+COPY clearml /build/clearml
+COPY clearml-agent /build/clearml-agent
+COPY clearml-server /build/clearml-server
+COPY containers/python-build.sh /build/python-build.sh
+ARG PIP_INDEX_URL
+ENV PIP_DISABLE_PIP_VERSION_CHECK=1 PIP_NO_INPUT=1 PIP_CERT=/etc/pki/tls/certs/ca-bundle.crt
+RUN --mount=type=secret,id=pip_config sh /build/python-build.sh
+
+FROM ${PYTHON_BUILDER_IMAGE} AS python-build
+COPY wheelhouse /wheelhouse
+COPY clearml-server /build/clearml-server
+
+FROM ${NODE_BUILDER_IMAGE} AS web-build
+USER root
+COPY config/ca.pem /etc/pki/ca-trust/source/anchors/site.crt
+RUN update-ca-trust && node -e 'if(process.versions.node.split(".")[0] !== "24")process.exit(1)' && pnpm --version | grep '^10\.'
+WORKDIR /build/web
+COPY clearml-web /build/web
+ARG NPM_REGISTRY
+ENV NODE_EXTRA_CA_CERTS=/etc/pki/tls/certs/ca-bundle.crt PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 CYPRESS_INSTALL_BINARY=0
+RUN --mount=type=secret,id=npm_config \
+    rm -f .npmrc && \
+    if [ -f /run/secrets/npm_config ]; then cp /run/secrets/npm_config /tmp/npmrc; else touch /tmp/npmrc; fi && \
+    NPM_CONFIG_USERCONFIG=/tmp/npmrc pnpm install --registry="$NPM_REGISTRY" --frozen-lockfile && \
+    rm -f /tmp/npmrc && pnpm run build && pnpm run build-widgets
+
+FROM ${RUNTIME_BASE_IMAGE} AS python-runtime
+USER root
+COPY config/ca.pem /etc/pki/ca-trust/source/anchors/site.crt
+COPY containers/install-rpms.sh /tmp/install-rpms.sh
+RUN update-ca-trust
+RUN --mount=type=secret,id=yum_repo sh /tmp/install-rpms.sh python3.11 python3.11-pip libstdc++ libgomp shadow-utils util-linux-core curl
+COPY --from=python-build /wheelhouse /wheelhouse
+RUN python3.11 -m venv /opt/venv && /opt/venv/bin/pip install --no-index --find-links=/wheelhouse --require-hashes -r /wheelhouse/requirements.lock && rm -rf /wheelhouse && \
+    useradd -u 1000 -m clearml
+ENV PATH=/opt/venv/bin:$PATH PYTHONUNBUFFERED=1 CLEARML_CONFIG_DIR=/opt/clearml/config \
+    SSL_CERT_FILE=/etc/pki/tls/certs/ca-bundle.crt REQUESTS_CA_BUNDLE=/etc/pki/tls/certs/ca-bundle.crt PIP_CERT=/etc/pki/tls/certs/ca-bundle.crt
+WORKDIR /opt/clearml
+
+FROM python-runtime AS server
+COPY --from=python-build /build/clearml-server/apiserver /opt/clearml/apiserver
+COPY --from=python-build /build/clearml-server/fileserver /opt/clearml/fileserver
+COPY containers/server-entrypoint.sh /usr/local/bin/server-entrypoint
+COPY scripts/check-databases.py /opt/clearml/check-databases.py
+RUN mkdir -p /opt/clearml/config /opt/clearml/log /mnt/fileserver /var/log/clearml && chown -R 1000:1000 /opt/clearml /mnt/fileserver /var/log/clearml && chmod +x /usr/local/bin/server-entrypoint
+ENTRYPOINT ["/usr/local/bin/server-entrypoint"]
+CMD ["apiserver"]
+
+FROM python-runtime AS agent
+ARG DOCKER_CLI_PACKAGE=docker-ce-cli
+RUN --mount=type=secret,id=yum_repo sh /tmp/install-rpms.sh "$DOCKER_CLI_PACKAGE"
+ENV PIP_DISABLE_PIP_VERSION_CHECK=1
+COPY scripts/docker-policy.py /usr/local/bin/docker
+RUN chmod +x /usr/local/bin/docker
+ENTRYPOINT ["clearml-agent"]
+
+FROM python-runtime AS task
+CMD ["python"]
+
+FROM ${RUNTIME_BASE_IMAGE} AS web
+USER root
+COPY config/ca.pem /etc/pki/ca-trust/source/anchors/site.crt
+COPY containers/install-rpms.sh /tmp/install-rpms.sh
+RUN update-ca-trust
+RUN --mount=type=secret,id=yum_repo sh /tmp/install-rpms.sh nginx shadow-utils util-linux-core curl && useradd -u 1000 -m clearml
+COPY --from=web-build /build/web/build /usr/share/nginx/html
+COPY --from=web-build /build/web/dist/report-widgets /usr/share/nginx/widgets
+COPY containers/nginx.conf /etc/nginx/nginx.conf
+COPY containers/web-entrypoint.sh /usr/local/bin/web-entrypoint
+RUN chmod +x /usr/local/bin/web-entrypoint
+RUN mkdir -p /tmp/nginx && chown -R 1000:1000 /tmp/nginx /var/lib/nginx /var/log/nginx /usr/share/nginx
+ENTRYPOINT ["/usr/local/bin/web-entrypoint"]
+EXPOSE 8080
+CMD ["nginx", "-g", "daemon off;"]

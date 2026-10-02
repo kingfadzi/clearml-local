@@ -1,0 +1,7 @@
+[el9-mirror]
+name=EL9 packages
+baseurl=https://yum.example.com/repository/el9/$basearch/
+enabled=1
+gpgcheck=1
+gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-AlmaLinux-9
+# UBI deployments: replace with RHEL/UBI repositories and keys.

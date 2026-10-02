@@ -1,0 +1,12 @@
+**/.git
+**/__pycache__
+.env*
+var
+repositories
+tests
+dist
+*.zip
+*.part
+generated
+config
+!config/ca.pem
