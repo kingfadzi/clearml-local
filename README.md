@@ -3,7 +3,7 @@
 - Builds ClearML Server (API, fileserver, web UI, widgets, async deletion worker), the services agent and the SDK/agent Python packages from pinned GitHub source ZIPs.
 - Deploys with Docker Compose against network-hosted MongoDB, Elasticsearch and Redis. No database containers in this stack.
 - Companion database stack: the `data-services` repository (same group).
-- Runtime base image and builder images are configurable. Verified on AlmaLinux 9; see "Verified" below for UBI 9.
+- One blessed EL9 base image (`BASE_IMAGE`) provides the runtime and, via its repositories, the Python and Node build toolchains. Verified on AlmaLinux 9; see "Verified" below for UBI 9.
 
 ## Layout
 
@@ -25,8 +25,8 @@
 
 - Linux host with Docker Engine, BuildKit and Compose v2 (`--wait`). Python 3.11+.
 - `vm.max_map_count >= 262144` on the host that runs the database stack.
-- Builder images: `almalinux9-python:3.11` and `almalinux9-node:24` from the `builder-images` repository (Node 24, pnpm 10).
-- Base and builder images are pulled from their registry when not present locally. Tags must be versioned (`:latest` is rejected) and, when `ALLOWED_HOSTS` is set, from a listed registry.
+- `BASE_IMAGE` is pulled from its registry when not present locally. Tag must be versioned (`:latest` is rejected) and, when `ALLOWED_HOSTS` is set, from a listed registry.
+- Its repositories must provide `python3.11`, `python3.11-devel`, `gcc`, `nginx`, `shadow-utils`, `util-linux-core`, the `NODE_PACKAGE` Node.js stream (22.12+) and `DOCKER_CLI_PACKAGE`.
 - `TLS_CA_BUNDLE_URL`: URL of a zip holding the internally signed CA certificates (`.pem`/`.crt`/`.cer`, any folder layout). Blank means no private CA is required. `trust` or `build` downloads it to `config/tls-ca-bundle.zip`; every image stage installs it into OS trust.
 - Bootstrap: if the download host itself uses the private CA, place the CA by hand as `config/tls-ca-bundle.pem` (the same file is inside the zip). It is used to verify the download and is installed into the images as well.
 - Download failure: an already present `config/tls-ca-bundle.zip` is reused with a warning; otherwise the command stops and tells you to place the PEM or the zip. `./clearmlctl trust` stages and validates without building.
@@ -36,7 +36,7 @@
 - Copy `.env.example` to `.env`. Values are literal; no shell expansion. Keep it mode 600.
 - `ALLOWED_HOSTS`: optional allowlist of hostnames builds may contact (registries, package indexes). Blank disables the check. The only network switch in the installer.
 - `PIP_INDEX_URL`, `NPM_REGISTRY`: package indexes. Public or mirrored, both must be listed in `ALLOWED_HOSTS`.
-- RPMs install from the repositories baked into the base image. The base must provide `python3.11`, `nginx`, `shadow-utils`, `util-linux-core` and `DOCKER_CLI_PACKAGE`.
+- `NODE_PACKAGE`: Node.js RPM spec installed in the build stage (default `@nodejs:22/common`). `PNPM_VERSION`: pnpm spec installed from `NPM_REGISTRY` (default `10`, the major the web lockfile needs).
 - `HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY`: proxy for build-time downloads. Blank means no proxy. Passed to every build step in both letter cases.
 - `PIP_VERSION`: pip installed in every runtime venv and pinned for task containers, so the agent's in-container pip upgrade is a no-op.
 - Database keys: copy from the data-services `generated/clearml.env` into the matching keys (replace, do not append).
@@ -95,7 +95,7 @@
 ## Verified (2026-10-02, lab)
 
 - Lab used public PyPI and npm through `ALLOWED_HOSTS`; the lab base image carried the vendor YUM repos; the lab registry held base, builder and output images.
-- Built from pinned ZIPs; 31 unit tests green; all four images built on AlmaLinux 9.
+- Built from pinned ZIPs; all four images built on AlmaLinux 9 from the single base image.
 - `preflight` and `verify` passed against data-services (MongoDB 8.0.15, Elasticsearch 8.19.9, Redis 8.2.10) in plain and TLS modes.
 - Wrong passwords and an untrusted CA were rejected for all three databases.
 - SDK smoke test passed from the source-built task image; artifact landed in `DATA_DIR`; async deletion removed it after task deletion.

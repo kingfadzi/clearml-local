@@ -1,12 +1,32 @@
-ARG RUNTIME_BASE_IMAGE
-ARG PYTHON_BUILDER_IMAGE
-ARG NODE_BUILDER_IMAGE
-FROM ${PYTHON_BUILDER_IMAGE} AS python-resolve
+ARG BASE_IMAGE
+# Build toolchains derive from the one blessed base image; packages come from its repositories.
+FROM ${BASE_IMAGE} AS python-builder
 USER root
-WORKDIR /build
 COPY generated/trust/ /tmp/trust/
 COPY containers/install-trust.sh /tmp/install-trust.sh
-RUN sh /tmp/install-trust.sh && rm -rf /tmp/trust /tmp/install-trust.sh && python3.11 -c 'import sys; assert sys.version_info[:2] == (3,11)'
+COPY containers/install-rpms.sh /tmp/install-rpms.sh
+RUN sh /tmp/install-trust.sh && rm -rf /tmp/trust /tmp/install-trust.sh && \
+    sh /tmp/install-rpms.sh python3.11 python3.11-pip python3.11-devel gcc gcc-c++ make libffi-devel openssl-devel zlib-devel && \
+    python3.11 -c 'import sys; assert sys.version_info[:2] == (3,11)'
+
+FROM ${BASE_IMAGE} AS node-builder
+USER root
+ARG NODE_PACKAGE
+ARG PNPM_VERSION
+ARG NPM_REGISTRY
+COPY generated/trust/ /tmp/trust/
+COPY containers/install-trust.sh /tmp/install-trust.sh
+COPY containers/install-rpms.sh /tmp/install-rpms.sh
+ENV NODE_EXTRA_CA_CERTS=/etc/pki/tls/certs/ca-bundle.crt
+RUN sh /tmp/install-trust.sh && rm -rf /tmp/trust /tmp/install-trust.sh && \
+    sh /tmp/install-rpms.sh ${NODE_PACKAGE} && \
+    npm config set -g cafile /etc/pki/tls/certs/ca-bundle.crt && \
+    npm install -g --registry="$NPM_REGISTRY" "pnpm@${PNPM_VERSION}" && \
+    node -e 'const [major, minor] = process.versions.node.split(".").map(Number); if (major < 22 || (major === 22 && minor < 12)) process.exit(1)' && \
+    pnpm --version | grep -q '^10\.'
+
+FROM python-builder AS python-resolve
+WORKDIR /build
 COPY clearml /build/clearml
 COPY clearml-agent /build/clearml-agent
 COPY clearml-server /build/clearml-server
@@ -16,25 +36,21 @@ ARG PIP_VERSION
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1 PIP_NO_INPUT=1 PIP_CERT=/etc/pki/tls/certs/ca-bundle.crt
 RUN --mount=type=secret,id=pip_config sh /build/python-build.sh
 
-FROM ${PYTHON_BUILDER_IMAGE} AS python-build
+FROM python-builder AS python-build
 COPY wheelhouse /wheelhouse
 COPY clearml-server /build/clearml-server
 
-FROM ${NODE_BUILDER_IMAGE} AS web-build
-USER root
-COPY generated/trust/ /tmp/trust/
-COPY containers/install-trust.sh /tmp/install-trust.sh
-RUN sh /tmp/install-trust.sh && rm -rf /tmp/trust /tmp/install-trust.sh && node -e 'if(process.versions.node.split(".")[0] !== "24")process.exit(1)' && pnpm --version | grep '^10\.'
+FROM node-builder AS web-build
 WORKDIR /build/web
 COPY clearml-web /build/web
 ARG NPM_REGISTRY
-ENV NODE_EXTRA_CA_CERTS=/etc/pki/tls/certs/ca-bundle.crt PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 CYPRESS_INSTALL_BINARY=0 NODE_OPTIONS=--max-old-space-size=6144
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 CYPRESS_INSTALL_BINARY=0 NODE_OPTIONS=--max-old-space-size=6144
 RUN --mount=type=secret,id=npm_config \
     if [ -f /run/secrets/npm_config ]; then cp /run/secrets/npm_config /tmp/npmrc; else touch /tmp/npmrc; fi && \
     NPM_CONFIG_USERCONFIG=/tmp/npmrc pnpm install --registry="$NPM_REGISTRY" --frozen-lockfile && \
     rm -f /tmp/npmrc && pnpm run build && pnpm run build-widgets
 
-FROM ${RUNTIME_BASE_IMAGE} AS python-runtime
+FROM ${BASE_IMAGE} AS python-runtime
 USER root
 COPY generated/trust/ /tmp/trust/
 COPY containers/install-trust.sh /tmp/install-trust.sh
@@ -72,7 +88,7 @@ FROM python-runtime AS task
 COPY --from=python-build /wheelhouse/clearml_agent-*.whl /wheelhouse/clearml-*.whl /opt/wheels/
 CMD ["python"]
 
-FROM ${RUNTIME_BASE_IMAGE} AS web
+FROM ${BASE_IMAGE} AS web
 USER root
 COPY generated/trust/ /tmp/trust/
 COPY containers/install-trust.sh /tmp/install-trust.sh

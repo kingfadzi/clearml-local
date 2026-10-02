@@ -160,7 +160,7 @@ def proxy_args(env):
     return result
 
 def docker_build(root, env, file, tag, args=None, secrets=None, target=None):
-    local_image(need(env, 'RUNTIME_BASE_IMAGE'), env)
+    local_image(need(env, 'BASE_IMAGE'), env)
     command = ['docker', 'build', '--pull=false', '--network', env.get('BUILD_NETWORK', 'default'),
                '-f', str(root / file), '-t', tag]
     for key, value in (args or {}).items():
