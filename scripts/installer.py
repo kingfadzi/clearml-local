@@ -61,24 +61,34 @@ def main():
         fetch_ca_bundle(ROOT, env)
     elif command in ('dependencies','build'):
         build_args, secret_files = build_inputs(env)
-        if command == 'dependencies':
-            if (ROOT / 'wheelhouse').exists():
-                raise Error('wheelhouse already exists; preserve it or explicitly remove it to resolve new dependencies')
+        wheelhouse = ROOT / 'wheelhouse'
+        source_lock = json.loads((ROOT / 'sources.lock.json').read_text())
+        def wheelhouse_current():
+            lock = wheelhouse / 'source-lock.json'
+            return lock.is_file() and json.loads(lock.read_text()) == source_lock
+        def resolve_dependencies():
+            if wheelhouse.exists():
+                print('wheelhouse/ belongs to other sources; resolving again')
+                shutil.rmtree(wheelhouse)
             tag = need(env,'SERVER_IMAGE') + '-dependencies'
             docker_build(ROOT, env, 'containers/Containerfile', tag, build_args, secret_files, 'python-resolve')
             container = run('docker', 'create', tag, 'true', capture_output=True, text=True).stdout.strip()
             try:
-                run('docker','cp', f'{container}:/wheelhouse', ROOT / 'wheelhouse')
+                run('docker','cp', f'{container}:/wheelhouse', wheelhouse)
             finally:
                 run('docker','rm', container)
-            write_json(ROOT / 'wheelhouse/source-lock.json', json.loads((ROOT / 'sources.lock.json').read_text()))
+            write_json(wheelhouse / 'source-lock.json', source_lock)
             print('Dependency wheels and their hash lock are staged in wheelhouse/')
+        if command == 'dependencies':
+            if wheelhouse_current():
+                print('wheelhouse/ already matches the staged sources')
+            else:
+                resolve_dependencies()
         else:
             sources.verify(ROOT)
-            if not (ROOT / 'wheelhouse/source-lock.json').is_file():
-                raise Error('Run dependencies once to resolve and lock Python wheels')
-            if json.loads((ROOT / 'wheelhouse/source-lock.json').read_text()) != json.loads((ROOT / 'sources.lock.json').read_text()):
-                raise Error('Dependency wheels belong to different sources')
+            # build resolves wheels itself when the wheelhouse is missing or belongs to other sources.
+            if not wheelhouse_current():
+                resolve_dependencies()
             for target, tag in image_map(env).items():
                 local_image(tag, env)
                 docker_build(ROOT, env, 'containers/Containerfile', tag, build_args, secret_files, target)

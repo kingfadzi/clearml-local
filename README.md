@@ -49,8 +49,8 @@
 ```sh
 ./clearmlctl prepare        # stage sources, write sources.lock.json
 ./clearmlctl trust          # download/validate the CA bundle into generated/trust (optional, build does it too)
-./clearmlctl dependencies   # resolve wheels into wheelhouse/ (refuses to overwrite)
-./clearmlctl build          # server, web, agent, task images
+./clearmlctl dependencies   # optional: resolve wheels into wheelhouse/ (no-op when it matches the sources)
+./clearmlctl build          # resolves wheels if needed, then server, web, agent, task images
 ./clearmlctl configure      # generated/ (secrets, mode 600)
 ./clearmlctl preflight      # compose validation + authenticated DB checks inside the server image
 ./clearmlctl install
