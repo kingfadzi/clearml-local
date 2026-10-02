@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 for name in configuration credentials; do
-  cp "/run/site-$name.json" "/usr/share/nginx/html/$name.json"
+  cp "/run/site/$name.json" "/usr/share/nginx/html/$name.json"
   chown 1000:1000 "/usr/share/nginx/html/$name.json"
   chmod 600 "/usr/share/nginx/html/$name.json"
 done

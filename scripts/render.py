@@ -63,9 +63,10 @@ def render(root, env):
     write_json(generated / 'config/fileserver.conf', {'delete': {'allow_batch': True}})
     # In simple login mode the UI fetches credentials.json and uses the webserver system credential to create users.
     web = secure['credentials']['webserver']
-    write_json(generated / 'credentials.json', {'userKey': web['user_key'], 'userSecret': web['user_secret'],
+    # Files are grouped per service and mounted as directories: single-file bind mounts fail on Docker Desktop (WSL).
+    write_json(generated / 'web/credentials.json', {'userKey': web['user_key'], 'userSecret': web['user_secret'],
                                                 'companyID': 'd1bd92a3b039400cbafc60a7a5b1e52b'})  # apiserver default company
-    write_json(generated / 'configuration.json', {'apiBaseUrl': '/api', 'fileBaseUrl': need(env, 'CLEARML_FILES_URL'), 'displayedServerUrls': {'apiServer': need(env, 'CLEARML_API_URL'), 'filesServer': need(env, 'CLEARML_FILES_URL')}, 'hideUpdateNotice': True, 'showSurvey': False, 'GTM_ID': None, 'displayTips': False,
+    write_json(generated / 'web/configuration.json', {'apiBaseUrl': '/api', 'fileBaseUrl': need(env, 'CLEARML_FILES_URL'), 'displayedServerUrls': {'apiServer': need(env, 'CLEARML_API_URL'), 'filesServer': need(env, 'CLEARML_FILES_URL')}, 'hideUpdateNotice': True, 'showSurvey': False, 'GTM_ID': None, 'displayTips': False,
                                                      # enterpriseServer only hides the GitHub star widget (an api.github.com fetch) and a preferences notice.
                                                      'enterpriseServer': True})
     # Paths are resolved once, so moving the repository requires rerendering.
@@ -88,8 +89,7 @@ def render(root, env):
     services['async_delete']['depends_on'] = {n: {'condition': 'service_healthy'} for n in ('apiserver', 'fileserver')}
     services['webserver'] = {'image': need(env, 'WEB_IMAGE'), 'pull_policy': 'never', 'restart': 'unless-stopped',
                              'ports': port('WEB_PORT', 8080), 'depends_on': {n: {'condition': 'service_healthy'} for n in ('apiserver', 'fileserver')},
-                             'volumes': [f'{generated.resolve()}/configuration.json:/run/site-configuration.json:ro,z',
-                                         f'{generated.resolve()}/credentials.json:/run/site-credentials.json:ro,z'],
+                             'volumes': [f'{generated.resolve()}/web:/run/site:ro,z'],
                              'healthcheck': {'test': ['CMD', 'curl', '-fsS', 'http://localhost:8080/'], 'interval': '10s', 'timeout': '5s', 'retries': 10}}
     if boolean(env, 'ENABLE_AGENT', True):
         work = need(env, 'AGENT_WORK_DIR')
@@ -99,17 +99,17 @@ def render(root, env):
                                 'files_server': need(env, 'CLEARML_FILES_URL'), 'credentials': {'access_key': agent['user_key'], 'secret_key': agent['user_secret']}},
                         'agent': {'package_manager': {'type': 'pip', 'pip_version': '==' + (env.get('PIP_VERSION') or '25.2'), 'pytorch_resolve': 'none', 'extra_index_url': []}, 'docker_force_pull': False,
                                   'default_docker': {'image': need(env, 'TASK_IMAGE'), 'match_rules': []}, 'disable_ssh_mount': True, 'docker_install_opencv_libs': False, 'docker_init_bash_script': ['test -x /opt/venv/bin/python'], 'bootstrap': {'use_bootstrap': False, 'check_for_latest': False}, 'extra_docker_arguments': ['--pull=never', '-e', 'PIP_INDEX_URL=' + need(env, 'PIP_INDEX_URL'), '-e', 'PIP_EXTRA_INDEX_URL=', '-e', 'PIP_DISABLE_PIP_VERSION_CHECK=1', '-e', 'CLEARML_AGENT_SKIP_PYTHON_ENV_INSTALL=1']}}
-        write_json(generated / 'agent.conf', agent_config)
+        write_json(generated / 'agent/clearml.conf', agent_config)
         services['agent-services'] = {'image': need(env, 'AGENT_IMAGE'), 'pull_policy': 'never', 'restart': 'unless-stopped',
             'command': ['daemon', '--foreground', '--services-mode', '--cpu-only', '--queue', 'services', '--create-queue', '--docker', need(env, 'TASK_IMAGE')],
             'depends_on': {'apiserver': {'condition': 'service_healthy'}},
             # host:container mapping lets sibling task containers mount the agent's work files.
-            'environment': {'CLEARML_CONFIG_FILE': '/etc/clearml.conf', 'CLEARML_AGENT_DOCKER_HOST_MOUNT': f'{work}:/root/.clearml',
+            'environment': {'CLEARML_CONFIG_FILE': '/run/clearml-agent/clearml.conf', 'CLEARML_AGENT_DOCKER_HOST_MOUNT': f'{work}:/root/.clearml',
                             'CLEARML_AGENT_DOCKER_AGENT_REPO': '--no-index --find-links=/opt/wheels clearml-agent',
                             'CLEARML_AGENT_SKIP_PIP_VENV_INSTALL': '/opt/venv/bin/python',
                             'PIP_INDEX_URL': need(env, 'PIP_INDEX_URL'), 'PIP_EXTRA_INDEX_URL': '', 'PIP_DISABLE_PIP_VERSION_CHECK': '1',
                             'CLEARML_AGENT_DOCKER_IMAGE': need(env, 'TASK_IMAGE'), 'OFFLINE_TASK_IMAGE': need(env, 'TASK_IMAGE')},
-            'volumes': [f'{generated.resolve()}/agent.conf:/etc/clearml.conf:ro,z',
+            'volumes': [f'{generated.resolve()}/agent:/run/clearml-agent:ro,z',
                         f'{need(env, "DOCKER_SOCKET")}:/var/run/docker.sock', f'{work}:/root/.clearml:z']}
     write_json(generated / 'compose.json', {'name': 'clearml', 'services': services})
     return services
