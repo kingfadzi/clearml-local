@@ -17,13 +17,13 @@ ROOT = Path(__file__).resolve().parent.parent
 def build_inputs(env):
     sources.verify(ROOT)
     dependency_policy.check(ROOT, env)
-    local_image(need(env, 'BASE_IMAGE'), env)
-    ensure_image(env['BASE_IMAGE'])
+    for key in ('BASE_IMAGE', 'PYTHON_BUILDER_IMAGE', 'NODE_BUILDER_IMAGE'):
+        local_image(need(env, key), env)
+        ensure_image(env[key])
     for key in ('PIP_INDEX_URL', 'NPM_REGISTRY'):
         allowed_url(need(env, key), env)
     fetch_ca_bundle(ROOT, env)
-    args = {k: need(env,k) for k in ('BASE_IMAGE', 'PIP_INDEX_URL', 'NPM_REGISTRY')}
-    args['NODE_PACKAGE'] = env.get('NODE_PACKAGE') or '@nodejs:24/common'
+    args = {k: need(env,k) for k in ('BASE_IMAGE', 'PYTHON_BUILDER_IMAGE', 'NODE_BUILDER_IMAGE', 'PIP_INDEX_URL', 'NPM_REGISTRY')}
     args['PNPM_VERSION'] = env.get('PNPM_VERSION') or '10'
     args['DOCKER_CLI_PACKAGE'] = need(env, 'DOCKER_CLI_PACKAGE')
     args['PIP_VERSION'] = env.get('PIP_VERSION') or '25.2'

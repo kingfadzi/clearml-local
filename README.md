@@ -3,7 +3,7 @@
 - Builds ClearML Server (API, fileserver, web UI, widgets, async deletion worker), the services agent and the SDK/agent Python packages from pinned GitHub source ZIPs.
 - Deploys with Docker Compose against network-hosted MongoDB, Elasticsearch and Redis. No database containers in this stack.
 - Companion database stack: the `data-services` repository (same group).
-- One blessed EL9 base image (`BASE_IMAGE`) provides the runtime and, via its repositories, the Python and Node build toolchains. Verified on AlmaLinux 9; see "Verified" below for UBI 9.
+- One blessed EL9 base image (`BASE_IMAGE`) for the runtime; prebuilt `builder-images` toolchains for Python and Node. Verified on AlmaLinux 9; see "Verified" below for UBI 9.
 
 ## Layout
 
@@ -25,8 +25,8 @@
 
 - Linux host with Docker Engine, BuildKit and Compose v2 (`--wait`). Python 3.11+.
 - `vm.max_map_count >= 262144` on the host that runs the database stack.
-- `BASE_IMAGE` is pulled from its registry when not present locally. Tag must be versioned (`:latest` is rejected) and, when `ALLOWED_HOSTS` is set, from a listed registry.
-- Its repositories must provide `python3.11`, `python3.11-devel`, `gcc`, `nginx`, `shadow-utils`, `util-linux-core`, the `NODE_PACKAGE` Node.js stream (24; 22.12+ accepted) and `DOCKER_CLI_PACKAGE`.
+- `BASE_IMAGE`, `PYTHON_BUILDER_IMAGE` and `NODE_BUILDER_IMAGE` are pulled from their registry when not present locally. Tags must be versioned (`:latest` is rejected) and, when `ALLOWED_HOSTS` is set, from a listed registry.
+- The base's repositories must provide `python3.11`, `nginx`, `shadow-utils`, `util-linux-core` and `DOCKER_CLI_PACKAGE`. The builder images come from the `builder-images` project: Python 3.11 with compilers; Node 24 (22.12+ accepted) with pnpm 10.
 - `TLS_CA_BUNDLE_URL`: URL of a zip holding the internally signed CA certificates (`.pem`/`.crt`/`.cer`, any folder layout). Blank means no private CA is required. `trust` or `build` downloads it to `config/tls-ca-bundle.zip`; every image stage installs it into OS trust.
 - Bootstrap: if the download host itself uses the private CA, place the CA by hand as `config/tls-ca-bundle.pem` (the same file is inside the zip). It is used to verify the download and is installed into the images as well.
 - Download failure: an already present `config/tls-ca-bundle.zip` is reused with a warning; otherwise the command stops and tells you to place the PEM or the zip. `./clearmlctl trust` stages and validates without building.
@@ -36,7 +36,7 @@
 - Copy `.env.example` to `.env`. Values are literal; no shell expansion. Keep it mode 600.
 - `ALLOWED_HOSTS`: optional allowlist of hostnames builds may contact (registries, package indexes). Blank disables the check. The only network switch in the installer.
 - `PIP_INDEX_URL`, `NPM_REGISTRY`: package indexes. Public or mirrored, both must be listed in `ALLOWED_HOSTS`.
-- `NODE_PACKAGE`: Node.js RPM spec installed in the build stage (default `@nodejs:24/common`; the stage accepts 22.12 or newer). `PNPM_VERSION`: pnpm spec installed from `NPM_REGISTRY` (default `10`, the major the web lockfile needs).
+- `PNPM_VERSION`: pnpm spec installed from `NPM_REGISTRY` only when the Node builder image lacks pnpm (default `10`, the major the web lockfile needs).
 - `HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY`: proxy for build-time downloads. Blank means no proxy. Passed to every build step in both letter cases.
 - `PIP_VERSION`: pip installed in every runtime venv and pinned for task containers, so the agent's in-container pip upgrade is a no-op.
 - Database keys: copy from the data-services `generated/clearml.env` into the matching keys (replace, do not append).

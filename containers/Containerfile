@@ -1,27 +1,23 @@
 ARG BASE_IMAGE
-# Build toolchains derive from the one blessed base image; packages come from its repositories.
-FROM ${BASE_IMAGE} AS python-builder
+ARG PYTHON_BUILDER_IMAGE
+ARG NODE_BUILDER_IMAGE
+# Toolchains are prebuilt builder images; BASE_IMAGE is the runtime base.
+FROM ${PYTHON_BUILDER_IMAGE} AS python-builder
 USER root
 COPY generated/trust/ /tmp/trust/
 COPY containers/install-trust.sh /tmp/install-trust.sh
-COPY containers/install-rpms.sh /tmp/install-rpms.sh
-RUN sh /tmp/install-trust.sh && rm -rf /tmp/trust /tmp/install-trust.sh && \
-    sh /tmp/install-rpms.sh python3.11 python3.11-pip python3.11-devel gcc gcc-c++ make libffi-devel openssl-devel zlib-devel && \
-    python3.11 -c 'import sys; assert sys.version_info[:2] == (3,11)'
+RUN sh /tmp/install-trust.sh && rm -rf /tmp/trust /tmp/install-trust.sh && python3.11 -c 'import sys; assert sys.version_info[:2] == (3,11)'
 
-FROM ${BASE_IMAGE} AS node-builder
+FROM ${NODE_BUILDER_IMAGE} AS node-builder
 USER root
-ARG NODE_PACKAGE
 ARG PNPM_VERSION
 ARG NPM_REGISTRY
 COPY generated/trust/ /tmp/trust/
 COPY containers/install-trust.sh /tmp/install-trust.sh
-COPY containers/install-rpms.sh /tmp/install-rpms.sh
 ENV NODE_EXTRA_CA_CERTS=/etc/pki/tls/certs/ca-bundle.crt
+# pnpm 10 is expected in the builder image; install it from the registry only when missing.
 RUN sh /tmp/install-trust.sh && rm -rf /tmp/trust /tmp/install-trust.sh && \
-    sh /tmp/install-rpms.sh ${NODE_PACKAGE} && \
-    npm config set -g cafile /etc/pki/tls/certs/ca-bundle.crt && \
-    npm install -g --registry="$NPM_REGISTRY" "pnpm@${PNPM_VERSION}" && \
+    (command -v pnpm >/dev/null || npm install -g --registry="$NPM_REGISTRY" "pnpm@${PNPM_VERSION}") && \
     node -e 'const [major, minor] = process.versions.node.split(".").map(Number); if (major < 22 || (major === 22 && minor < 12)) process.exit(1)' && \
     pnpm --version | grep -q '^10\.'
 
