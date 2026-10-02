@@ -94,7 +94,7 @@ def render(root, env):
                                   'default_docker': {'image': need(env, 'TASK_IMAGE'), 'match_rules': []}, 'disable_ssh_mount': True, 'docker_install_opencv_libs': False, 'docker_init_bash_script': ['test -x /opt/venv/bin/python'], 'bootstrap': {'use_bootstrap': False, 'check_for_latest': False}, 'extra_docker_arguments': ['--pull=never', '-e', 'PIP_INDEX_URL=' + need(env, 'PIP_INDEX_URL'), '-e', 'PIP_EXTRA_INDEX_URL=', '-e', 'PIP_DISABLE_PIP_VERSION_CHECK=1', '-e', 'CLEARML_AGENT_SKIP_PYTHON_ENV_INSTALL=1']}}
         write_json(generated / 'agent.conf', agent_config)
         services['agent-services'] = {'image': need(env, 'AGENT_IMAGE'), 'pull_policy': 'never', 'restart': 'unless-stopped',
-            'command': ['daemon', '--foreground', '--services-mode', '--cpu-only', '--queue', 'services', '--docker', need(env, 'TASK_IMAGE')],
+            'command': ['daemon', '--foreground', '--services-mode', '--cpu-only', '--queue', 'services', '--create-queue', '--docker', need(env, 'TASK_IMAGE')],
             'depends_on': {'apiserver': {'condition': 'service_healthy'}},
             # host:container mapping lets sibling task containers mount the agent's work files.
             'environment': {'CLEARML_CONFIG_FILE': '/etc/clearml.conf', 'CLEARML_AGENT_DOCKER_HOST_MOUNT': f'{work}:/root/.clearml',
