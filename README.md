@@ -26,7 +26,7 @@
 - Linux host with Docker Engine, BuildKit and Compose v2 (`--wait`). Python 3.11+.
 - `vm.max_map_count >= 262144` on the host that runs the database stack.
 - Builder images: `almalinux9-python:3.11` and `almalinux9-node:24` from the `builder-images` repository (Node 24, pnpm 10).
-- Base image present locally and tagged from an `ALLOWED_HOSTS` registry. `:latest` is rejected.
+- Base and builder images are pulled from their registry when not present locally. Tags must be versioned (`:latest` is rejected) and, when `ALLOWED_HOSTS` is set, from a listed registry.
 - `TLS_CA_BUNDLE_URL`: URL of a zip holding the internally signed CA certificates (`.pem`/`.crt`/`.cer`, any folder layout). Blank means no private CA is required. The zip is downloaded to `config/tls-ca-bundle.zip` at build time and installed into the OS trust of every image stage. A zip placed there by hand is used when the URL is blank.
 
 ## Configuration

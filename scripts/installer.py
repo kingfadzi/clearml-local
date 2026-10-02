@@ -19,7 +19,7 @@ def build_inputs(env):
     dependency_policy.check(ROOT, env)
     for key in ('RUNTIME_BASE_IMAGE', 'PYTHON_BUILDER_IMAGE', 'NODE_BUILDER_IMAGE'):
         local_image(need(env, key), env)
-        run('docker', 'image', 'inspect', env[key], stdout=subprocess.DEVNULL)
+        ensure_image(env[key])
     for key in ('PIP_INDEX_URL', 'NPM_REGISTRY'):
         allowed_url(need(env, key), env)
     fetch_ca_bundle(ROOT, env)
@@ -33,6 +33,12 @@ def build_inputs(env):
             if not secrets[name].is_file():
                 raise Error(f'{key}: secret file missing')
     return args, secrets
+
+def ensure_image(image):
+    """Pull a base or builder image from its registry when it is not present locally."""
+    if subprocess.run(['docker', 'image', 'inspect', image], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode:
+        print(f'Pulling {image}')
+        run('docker', 'pull', image, stdout=subprocess.DEVNULL)
 
 def image_map(env):
     result = {'server': need(env,'SERVER_IMAGE'), 'web': need(env,'WEB_IMAGE')}
