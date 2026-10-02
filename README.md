@@ -26,7 +26,8 @@
 
 - Linux host with Docker Engine, BuildKit and Compose v2 (`--wait`). Python 3.11+.
 - `vm.max_map_count >= 262144` on the host that runs the database stack.
-- `BASE_IMAGE`, `PYTHON_BUILDER_IMAGE` and `NODE_BUILDER_IMAGE` are pulled from their registry when not present locally. Tags must be versioned (`:latest` is rejected) and, when `ALLOWED_HOSTS` is set, from a listed registry.
+- `BASE_IMAGE`, `PYTHON_BUILDER_IMAGE`, `NODE_BUILDER_IMAGE` and `DOCKER_CLI_IMAGE` are pulled from their registry when not present locally. Tags must be versioned (`:latest` is rejected) and, when `ALLOWED_HOSTS` is set, from a listed registry.
+- `SERVER_IMAGE`, `WEB_IMAGE`, `AGENT_IMAGE`, `TASK_IMAGE` are tags for the locally built images. They are never pushed, so no registry is needed; only a versioned tag.
 - The base's repositories must provide `python3.11`, `nginx`, `shadow-utils` and `util-linux-core`. The builder images come from the `builder-images` project: Python 3.11 with compilers; Node 24 (22.12+ accepted) with pnpm 10; `almalinux9-docker-cli` for the Docker CLI binary copied into the agent image.
 - `TLS_CA_BUNDLE_URL`: URL of a zip holding the internally signed CA certificates (`.pem`/`.crt`/`.cer`, any folder layout). Blank means no private CA is required. `trust` or `build` downloads it to `config/tls-ca-bundle.zip`; every image stage installs it into OS trust.
 - Bootstrap: if the download host itself uses the private CA, place the CA by hand as `config/tls-ca-bundle.pem` (the same file is inside the zip). It is used to verify the download and is installed into the images as well.

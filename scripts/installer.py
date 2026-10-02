@@ -8,7 +8,7 @@ import subprocess
 import sys
 import tarfile
 import tempfile
-from common import Error, allowed_url, boolean, compose, docker_build, env_file, fetch_ca_bundle, local_image, need, run, sha, write_json
+from common import Error, allowed_url, boolean, compose, docker_build, env_file, fetch_ca_bundle, local_image, need, output_tag, run, sha, write_json
 import sources
 import dependency_policy
 from render import render
@@ -92,7 +92,7 @@ def step_build(env):
     sources.verify(ROOT)
     build_args, secret_files = inputs(env)
     for target, tag in image_map(env).items():
-        local_image(tag, env)
+        output_tag(tag)
         docker_build(ROOT, env, 'containers/Containerfile', tag, build_args, secret_files, target)
     metadata = {}
     for target, image in image_map(env).items():

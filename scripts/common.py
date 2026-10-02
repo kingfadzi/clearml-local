@@ -159,6 +159,12 @@ def proxy_args(env):
             result[key.lower()] = value
     return result
 
+def output_tag(image):
+    """Locally built images are never pushed; only a versioned tag is required, no registry."""
+    last = image.rsplit('/', 1)[-1]
+    if ':' not in last or last.endswith(':latest'):
+        raise Error(f'Use a versioned tag for the built image: {image}')
+
 def docker_build(root, env, file, tag, args=None, secrets=None, target=None):
     local_image(need(env, 'BASE_IMAGE'), env)
     command = ['docker', 'build', '--pull=false', '--network', env.get('BUILD_NETWORK', 'default'),

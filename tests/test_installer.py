@@ -12,7 +12,7 @@ from unittest.mock import patch
 import zipfile
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0,str(ROOT/'scripts'))
-from common import Error, env_file, fetch_ca_bundle, local_image, proxy_args
+from common import Error, env_file, fetch_ca_bundle, local_image, output_tag, proxy_args
 import sources
 from render import render
 
@@ -107,6 +107,10 @@ class InstallerTests(unittest.TestCase):
         (self.root/'config').mkdir(exist_ok=True)
         with zipfile.ZipFile(self.root/'config/tls-ca-bundle.zip','w') as z: z.writestr('ca.crt','-----BEGIN CERTIFICATE-----')
         self.assertEqual(fetch_ca_bundle(self.root,{'TLS_CA_BUNDLE_URL':unreachable}),['zip'])
+    def test_output_tags_need_no_registry(self):
+        output_tag('clearml/server:local-1'); output_tag('server:1')
+        with self.assertRaises(Error):output_tag('clearml/server')
+        with self.assertRaises(Error):output_tag('clearml/server:latest')
     def test_proxy_blank_means_none(self):
         self.assertEqual(proxy_args({'HTTP_PROXY':'','HTTPS_PROXY':''}),{})
         self.assertEqual(proxy_args({'HTTPS_PROXY':'http://proxy.example:3128','NO_PROXY':'localhost'}),
