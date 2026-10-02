@@ -1,0 +1,26 @@
+{
+  "clearml-server": {
+    "origin": "clearml-server-0a90a2745885fd7173cdb1d5466855fc57b1187b.zip",
+    "archive_sha256": "e5599b337ec1042bbb85918d96f2a8db8f8020f99f42d9045d63b56b1f4bd061",
+    "tree_sha256": "93d56464e2cb51ba18ea3977744f5ae480e10b132489b7798f3eff4ca7f60b73",
+    "revision": "0a90a2745885fd7173cdb1d5466855fc57b1187b"
+  },
+  "clearml-web": {
+    "origin": "clearml-web-7219caa22113398e8a6655ebeea7dd69e6ce3edc.zip",
+    "archive_sha256": "462c470b844d4ecda47acec43d86e34b106f662cc8bf9db8da319d331d56a8a7",
+    "tree_sha256": "c39d01dc82e1f366808e72a7b887937f6344e8d450110ead9e3cf677e612842b",
+    "revision": "7219caa22113398e8a6655ebeea7dd69e6ce3edc"
+  },
+  "clearml-agent": {
+    "origin": "clearml-agent-328662fd981f417d83201c52a34a476d9ec32fbb.zip",
+    "archive_sha256": "09e9ecad519dd36f44719a6372bbf64a83e38526be333eb59e0f770698ebb4ee",
+    "tree_sha256": "cecbda64ea0f7fee63a509eb4adc5a13649a1bcb943149199aeb1da6de151692",
+    "revision": "328662fd981f417d83201c52a34a476d9ec32fbb"
+  },
+  "clearml": {
+    "origin": "clearml-559467f550c0d23dc3506ee551386c3b59e6b091.zip",
+    "archive_sha256": "7c28bd014611014ab5ea86e9c5bb102d1b7f572e014d6bfbccff35adf99b04f7",
+    "tree_sha256": "dbbe6f8ae13dad768da131b040abca0f831b8f6be108354ee1044b5a88858e93",
+    "revision": "559467f550c0d23dc3506ee551386c3b59e6b091"
+  }
+}

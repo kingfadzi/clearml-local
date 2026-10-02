@@ -116,6 +116,8 @@ def prepare(root, env):
                     temporary.unlink(missing_ok=True)
             else:
                 archive = archives[0]
+                if not revision and re.fullmatch(r'[a-f0-9]{40}', archive.stem[len(name) + 1:]):
+                    revision = archive.stem[len(name) + 1:]  # <name>-<commit>.zip supplied by hand
             checksum = sha(archive)
             if previous.get('archive_sha256') and checksum != previous['archive_sha256']:
                 raise Error(f'{name}: archive checksum mismatch')

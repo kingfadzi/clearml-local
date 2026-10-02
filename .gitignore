@@ -16,6 +16,5 @@ config/tls-ca-bundle.pem
 config/tls-ca-bundle.zip
 config/pip.conf
 config/npmrc
-sources.lock.json
 wheelhouse/
 repositories/

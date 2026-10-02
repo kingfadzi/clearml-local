@@ -10,7 +10,7 @@
 - `clearmlctl`: CLI wrapper for `scripts/installer.py`.
 - `scripts/`: installer, source staging, config renderer, dependency policy, Docker CLI guard for the agent, acceptance scripts.
 - `containers/Containerfile`: all image stages (python-resolve, python-build, web-build, python-runtime, server, agent, task, web).
-- `sources.json`: pinned source refs. `sources.lock.json` is written by `prepare` and must ship with a release.
+- `sources.json`: pinned source refs. `sources.lock.json` (committed) holds the exact commits and hashes; `prepare` verifies staged sources against it.
 - `wheelhouse/`: resolved Python wheels plus `requirements.lock` with hashes. Created by `dependencies`.
 - `tests/`: unit tests, no daemon needed. Run `python3 -m unittest discover -s tests -q`.
 
