@@ -12,7 +12,7 @@ from unittest.mock import patch
 import zipfile
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0,str(ROOT/'scripts'))
-from common import Error, env_file, check_repos, local_image
+from common import Error, env_file, local_image, proxy_args
 import sources
 from render import render
 
@@ -72,18 +72,13 @@ class InstallerTests(unittest.TestCase):
         (self.root/'clearml-server-0123abc.zip').touch();(self.root/'clearml-web-0123abc.zip').touch()
         sources.prepare(self.root,{'ALLOW_SOURCE_DOWNLOADS':'false'})
         self.assertTrue((self.root/'clearml/setup.py').is_file())
-    def test_unlisted_yum_repo_rejected(self):
-        path=self.root/'site.repo';path.write_text('[bad]\nbaseurl=https://other.example/repo\n')
-        with self.assertRaises(Error):check_repos(self.root,{'YUM_REPO_FILE':'site.repo','ALLOWED_HOSTS':'yum.example'})
-    def test_listed_yum_repo_accepted(self):
-        path=self.root/'site.repo';path.write_text('[ok]\nbaseurl=https://yum.example/repo\ngpgkey=file:///etc/pki/rpm-gpg/key\n')
-        self.assertEqual(check_repos(self.root,{'YUM_REPO_FILE':'site.repo','ALLOWED_HOSTS':'yum.example'}),path)
-    def test_malformed_yum_repo_file_reports_error(self):
-        path=self.root/'site.repo';path.write_text('[a]\nenabled=1\nenabled=1\n')
-        with self.assertRaises(Error):check_repos(self.root,{'YUM_REPO_FILE':'site.repo','ALLOWED_HOSTS':'yum.example'})
-    def test_empty_yum_repo_file_uses_base_image_repositories(self):
-        self.assertIsNone(check_repos(self.root,{'YUM_REPO_FILE':'','ALLOWED_HOSTS':'yum.example'}))
-        self.assertIsNone(check_repos(self.root,{'ALLOWED_HOSTS':'yum.example'}))
+    def test_blank_allowlist_disables_registry_check(self):
+        local_image('almalinux:9',{'ALLOWED_HOSTS':''}); local_image('registry.example/base:9',{})
+        with self.assertRaises(Error):local_image('registry.example/base:latest',{'ALLOWED_HOSTS':''})
+    def test_proxy_blank_means_none(self):
+        self.assertEqual(proxy_args({'HTTP_PROXY':'','HTTPS_PROXY':''}),{})
+        self.assertEqual(proxy_args({'HTTPS_PROXY':'http://proxy.example:3128','NO_PROXY':'localhost'}),
+                         {'HTTPS_PROXY':'http://proxy.example:3128','https_proxy':'http://proxy.example:3128','NO_PROXY':'localhost','no_proxy':'localhost'})
     def test_unlisted_image_registry_rejected(self):
         with self.assertRaises(Error):local_image('almalinux:9',{'ALLOWED_HOSTS':'registry.example'})
         with self.assertRaises(Error):local_image('registry.example/base:latest',{'ALLOWED_HOSTS':'registry.example'})

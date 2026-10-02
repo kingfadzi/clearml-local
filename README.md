@@ -32,9 +32,10 @@
 ## Configuration
 
 - Copy `.env.example` to `.env`. Values are literal; no shell expansion. Keep it mode 600.
-- `ALLOWED_HOSTS`: exact hostnames builds may contact (registries, package indexes, YUM repos). The only network switch in the installer.
+- `ALLOWED_HOSTS`: optional allowlist of hostnames builds may contact (registries, package indexes). Blank disables the check. The only network switch in the installer.
 - `PIP_INDEX_URL`, `NPM_REGISTRY`: package indexes. Public or mirrored, both must be listed in `ALLOWED_HOSTS`.
-- `YUM_REPO_FILE`: optional. Empty keeps the base image's repositories. A file replaces them for the RPM install steps (mounted as a BuildKit secret, removed afterwards). Needed when the base image lacks a repo for `docker-ce-cli`.
+- RPMs install from the repositories baked into the base image. The base must provide `python3.11`, `nginx`, `shadow-utils`, `util-linux-core` and `DOCKER_CLI_PACKAGE`.
+- `HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY`: proxy for build-time downloads. Blank means no proxy. Passed to every build step in both letter cases.
 - `PIP_VERSION`: pip installed in every runtime venv and pinned for task containers, so the agent's in-container pip upgrade is a no-op.
 - Database keys: copy from the data-services `generated/clearml.env` into the matching keys (replace, do not append).
 - `CLEARML_*_URL`: browser-reachable URLs. Task containers also use them.
@@ -85,12 +86,12 @@
 ## Transfer
 
 - `./clearmlctl bundle`: `dist/images.tar`, `dist/installer.tar.gz` (installer, sources, wheelhouse), `dist/checksums.json`.
-- Excluded: `.env`, `generated/`, `config/ca.pem`, `config/yum.repo`, data volumes. Transfer site configuration separately.
+- Excluded: `.env`, `generated/`, `config/ca.pem`, data volumes. Transfer site configuration separately.
 - Target: extract `installer.tar.gz`, place `images.tar` and `checksums.json` together, `./clearmlctl load --archive <path>`. A checksum mismatch refuses the archive.
 
 ## Verified (2026-10-02, lab)
 
-- Lab used public PyPI, npm and vendor YUM repos through `ALLOWED_HOSTS`; the lab registry held base, builder and output images.
+- Lab used public PyPI and npm through `ALLOWED_HOSTS`; the lab base image carried the vendor YUM repos; the lab registry held base, builder and output images.
 - Built from pinned ZIPs; 31 unit tests green; all four images built on AlmaLinux 9.
 - `preflight` and `verify` passed against data-services (MongoDB 8.0.15, Elasticsearch 8.19.9, Redis 8.2.10) in plain and TLS modes.
 - Wrong passwords and an untrusted CA were rejected for all three databases.

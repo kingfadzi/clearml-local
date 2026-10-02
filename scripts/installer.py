@@ -8,7 +8,7 @@ import subprocess
 import sys
 import tarfile
 import tempfile
-from common import Error, allowed_url, boolean, check_repos, compose, docker_build, env_file, local_image, need, run, sha, write_json
+from common import Error, allowed_url, boolean, compose, docker_build, env_file, local_image, need, run, sha, write_json
 import sources
 import dependency_policy
 from render import render
@@ -16,7 +16,6 @@ ROOT = Path(__file__).resolve().parent.parent
 
 def build_inputs(env):
     sources.verify(ROOT)
-    check_repos(ROOT, env)
     dependency_policy.check(ROOT, env)
     for key in ('RUNTIME_BASE_IMAGE', 'PYTHON_BUILDER_IMAGE', 'NODE_BUILDER_IMAGE'):
         local_image(need(env, key), env)
@@ -32,7 +31,7 @@ def build_inputs(env):
     args = {k: need(env,k) for k in ('RUNTIME_BASE_IMAGE', 'PYTHON_BUILDER_IMAGE', 'NODE_BUILDER_IMAGE', 'PIP_INDEX_URL', 'NPM_REGISTRY')}
     args['DOCKER_CLI_PACKAGE'] = need(env, 'DOCKER_CLI_PACKAGE')
     args['PIP_VERSION'] = env.get('PIP_VERSION') or '25.2'
-    secrets = {'yum_repo': ROOT / env['YUM_REPO_FILE'] if env.get('YUM_REPO_FILE') else None}
+    secrets = {}
     for key, name in [('PIP_CONFIG_FILE','pip_config'), ('NPM_CONFIG_FILE','npm_config')]:
         if env.get(key):
             secrets[name] = ROOT / env[key]
@@ -117,7 +116,7 @@ def main():
         run('docker','save','-o',archive,*image_map(env).values())
         # Explicit allowlist avoids collecting real .env, generated secrets or database volumes.
         with tarfile.open(destination / 'installer.tar.gz','w:gz') as bundle:
-            for name in ('clearmlctl','scripts','containers','config/yum.repo.example','.env.example','.dockerignore','sources.json','sources.lock.json','README.md'):
+            for name in ('clearmlctl','scripts','containers','.env.example','.dockerignore','sources.json','sources.lock.json','README.md'):
                 bundle.add(ROOT/name, arcname=name, filter=lambda t: None if '__pycache__' in t.name else t)
             for name in json.loads((ROOT/'sources.json').read_text()):
                 bundle.add(ROOT/name, arcname=name, filter=lambda t: None if '/.git/' in t.name or t.name.endswith('/.git') else t)

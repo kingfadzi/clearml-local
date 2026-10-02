@@ -12,11 +12,9 @@ clearml/
 clearml-server/
 clearml-web/
 clearml-agent/
-config/yum.repo
 config/ca.pem
 config/pip.conf
 config/npmrc
 sources.lock.json
 wheelhouse/
 repositories/
-config/yum.ubi9.repo

@@ -37,7 +37,7 @@ USER root
 COPY config/ca.pem /etc/pki/ca-trust/source/anchors/site.crt
 COPY containers/install-rpms.sh /tmp/install-rpms.sh
 RUN update-ca-trust
-RUN --mount=type=secret,id=yum_repo sh /tmp/install-rpms.sh python3.11 python3.11-pip libstdc++ libgomp shadow-utils util-linux-core
+RUN sh /tmp/install-rpms.sh python3.11 python3.11-pip libstdc++ libgomp shadow-utils util-linux-core
 ARG PIP_VERSION
 COPY --from=python-build /wheelhouse /wheelhouse
 RUN python3.11 -m venv /opt/venv && /opt/venv/bin/pip install --no-index --find-links=/wheelhouse "pip==${PIP_VERSION}" && \
@@ -58,7 +58,7 @@ CMD ["apiserver"]
 
 FROM python-runtime AS agent
 ARG DOCKER_CLI_PACKAGE=docker-ce-cli
-RUN --mount=type=secret,id=yum_repo sh /tmp/install-rpms.sh "$DOCKER_CLI_PACKAGE"
+RUN sh /tmp/install-rpms.sh "$DOCKER_CLI_PACKAGE"
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1
 COPY scripts/docker-policy.py /usr/local/bin/docker
 RUN chmod +x /usr/local/bin/docker
@@ -74,7 +74,7 @@ USER root
 COPY config/ca.pem /etc/pki/ca-trust/source/anchors/site.crt
 COPY containers/install-rpms.sh /tmp/install-rpms.sh
 RUN update-ca-trust
-RUN --mount=type=secret,id=yum_repo sh /tmp/install-rpms.sh nginx shadow-utils util-linux-core && useradd -u 1000 -m clearml
+RUN sh /tmp/install-rpms.sh nginx shadow-utils util-linux-core && useradd -u 1000 -m clearml
 COPY --from=web-build /build/web/build /usr/share/nginx/html
 COPY --from=web-build /build/web/dist/report-widgets /usr/share/nginx/widgets
 # The Angular application builder may nest output under browser/; serve it from the root either way.

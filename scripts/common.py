@@ -71,51 +71,43 @@ def sha(path):
             digest.update(chunk)
     return digest.hexdigest()
 
+def allowed_hosts(env):
+    """Empty ALLOWED_HOSTS disables the host allowlist."""
+    return {x.strip() for x in env.get('ALLOWED_HOSTS', '').split(',') if x.strip()}
+
 def allowed_url(url, env):
     parsed = urlparse(url)
-    hosts = {x.strip() for x in need(env, 'ALLOWED_HOSTS').split(',')}
-    if parsed.scheme not in ('http', 'https') or parsed.hostname not in hosts:
+    hosts = allowed_hosts(env)
+    if parsed.scheme not in ('http', 'https') or (hosts and parsed.hostname not in hosts):
         raise Error(f'Repository host is not in ALLOWED_HOSTS: {parsed.hostname}')
     if parsed.username or parsed.password:
         raise Error('Use secret configuration files for repository credentials')
     return url
 
 def local_image(image, env):
-    if '/' not in image or urlparse('https://' + image.split('/')[0]).hostname not in {x.strip() for x in need(env, 'ALLOWED_HOSTS').split(',')}:
+    hosts = allowed_hosts(env)
+    if hosts and ('/' not in image or urlparse('https://' + image.split('/')[0]).hostname not in hosts):
         raise Error(f"Image registry is not in ALLOWED_HOSTS: {image}")
     if ':latest' in image or (':' not in image.rsplit('/', 1)[-1] and '@sha256:' not in image):
         raise Error('Use a versioned image tag or digest')
 
-def check_repos(root, env):
-    """Empty YUM_REPO_FILE keeps the base image's own repositories."""
-    import configparser
-    if not env.get('YUM_REPO_FILE'):
-        return None
-    repo = root / env['YUM_REPO_FILE']
-    parser = configparser.ConfigParser(interpolation=None)
-    try:
-        found = parser.read(repo)
-    except configparser.Error as error:
-        raise Error(f'YUM_REPO_FILE is not a valid repo file: {error}')
-    if not found or not parser.sections():
-        raise Error('YUM_REPO_FILE must contain repository definitions')
-    for section in parser.values():
-        if section is parser.defaults():
-            continue
-        if section.get('mirrorlist') or section.get('metalink'):
-            raise Error('YUM repositories must use explicit baseurl values')
-        for url in section.get('baseurl', '').split():
-            allowed_url(url, env)
-        for url in section.get('gpgkey', '').split():
-            if not url.startswith('file:///'):
-                allowed_url(url, env)
-    return repo
+def proxy_args(env):
+    """Blank proxy settings mean no proxy. Both cases are passed; dnf, pip, curl and npm differ."""
+    result = {}
+    for key in ('HTTP_PROXY', 'HTTPS_PROXY', 'NO_PROXY'):
+        value = env.get(key, '')
+        if value:
+            result[key] = value
+            result[key.lower()] = value
+    return result
 
 def docker_build(root, env, file, tag, args=None, secrets=None, target=None):
     local_image(need(env, 'RUNTIME_BASE_IMAGE'), env)
     command = ['docker', 'build', '--pull=false', '--network', env.get('BUILD_NETWORK', 'default'),
                '-f', str(root / file), '-t', tag]
     for key, value in (args or {}).items():
+        command += ['--build-arg', f'{key}={value}']
+    for key, value in proxy_args(env).items():
         command += ['--build-arg', f'{key}={value}']
     for key, path in (secrets or {}).items():
         if path:
