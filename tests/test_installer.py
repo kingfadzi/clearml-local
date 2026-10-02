@@ -120,18 +120,21 @@ class InstallerTests(unittest.TestCase):
     def test_partial_agent_credentials_rejected(self):
         env=self.clearml_env();env['CLEARML_AGENT_ACCESS_KEY']='key'
         with self.assertRaises(Error):render(self.root,env)
-    def test_elastic_tls_options_only_on_https_nodes(self):
+    def test_elastic_tls_options_are_client_arguments(self):
         env = self.clearml_env()
-        env['ELASTICSEARCH_URLS'] = 'http://plain:9200,https://secure:9243/elastic'
+        env['ELASTICSEARCH_URLS'] = 'https://secure:9243/elastic,https://second:9243/elastic'
         render(self.root, env)
-        hosts = json.loads((self.root/'generated/config/hosts.conf').read_text())
-        cluster = hosts['elastic']['events']
-        plain, secure = cluster['hosts']
+        cluster = json.loads((self.root/'generated/config/hosts.conf').read_text())['elastic']['events']
+        self.assertEqual(cluster['args']['ca_certs'], '/etc/pki/tls/certs/ca-bundle.crt')
+        self.assertTrue(cluster['args']['verify_certs'])
+        self.assertEqual(set(cluster['hosts'][0]), {'host', 'port', 'scheme', 'path_prefix'})
+        self.assertEqual(cluster['hosts'][0]['path_prefix'], '/elastic')
+        env['ELASTICSEARCH_URLS'] = 'http://plain:9200'
+        render(self.root, env)
+        cluster = json.loads((self.root/'generated/config/hosts.conf').read_text())['elastic']['events']
         self.assertNotIn('ca_certs', cluster['args'])
-        self.assertNotIn('ca_certs', plain)
-        self.assertEqual(secure['ca_certs'], '/etc/pki/tls/certs/ca-bundle.crt')
-        self.assertTrue(secure['verify_certs'])
-        self.assertEqual(secure['path_prefix'], '/elastic')
+        env['ELASTICSEARCH_URLS'] = 'http://plain:9200,https://secure:9243'
+        with self.assertRaises(Error): render(self.root, env)
     def test_elastic_query_string_rejected(self):
         env = self.clearml_env()
         env['ELASTICSEARCH_URLS'] = 'https://secure:9243/?token=secret'

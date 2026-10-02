@@ -40,10 +40,14 @@ def render(root, env):
         node = {'host': parsed.hostname, 'port': parsed.port or (443 if parsed.scheme == 'https' else 9200), 'scheme': parsed.scheme}
         if parsed.path.strip('/'):
             node['path_prefix'] = parsed.path.rstrip('/')
-        if parsed.scheme == 'https':
-            node.update(verify_certs=True, ca_certs='/etc/pki/tls/certs/ca-bundle.crt')
         elastic.append(node)
-    es_args = {}
+    schemes = {node['scheme'] for node in elastic}
+    if len(schemes) > 1:
+        raise Error('ELASTICSEARCH_URLS must share one scheme; TLS options apply to the whole cluster')
+    # elasticsearch-py 8 accepts only scheme/host/port/path_prefix per node; TLS settings are client arguments.
+    es_args = {'timeout': 60, 'max_retries': 3, 'retry_on_timeout': True}
+    if schemes == {'https'}:
+        es_args.update(verify_certs=True, ca_certs='/etc/pki/tls/certs/ca-bundle.crt')
     hosts = {'mongo': {'backend': {'host': need(env, 'MONGO_BACKEND_URI')}, 'auth': {'host': need(env, 'MONGO_AUTH_URI')}},
              'elastic': {name: {'hosts': elastic, 'args': es_args} for name in ('events', 'workers')},
              # The fileserver shares this directory and reads the fileserver alias plus api_server.
