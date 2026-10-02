@@ -22,6 +22,7 @@ with sync_playwright() as p:
     if name.count():
         name.fill('offline-check')
         page.wait_for_timeout(1000)
+        page.keyboard.press('Escape')  # close the name autocomplete overlay
         page.locator('form button').first.click()
         try:
             page.wait_for_url(lambda u: '/login' not in u, timeout=30000)
