@@ -81,6 +81,9 @@ class InstallerTests(unittest.TestCase):
     def test_listed_yum_repo_accepted(self):
         path=self.root/'site.repo';path.write_text('[ok]\nbaseurl=https://yum.example/repo\ngpgkey=file:///etc/pki/rpm-gpg/key\n')
         self.assertEqual(check_repos(self.root,{'YUM_REPO_FILE':'site.repo','ALLOWED_HOSTS':'yum.example'}),path)
+    def test_malformed_yum_repo_file_reports_error(self):
+        path=self.root/'site.repo';path.write_text('[a]\nenabled=1\nenabled=1\n')
+        with self.assertRaises(Error):check_repos(self.root,{'YUM_REPO_FILE':'site.repo','ALLOWED_HOSTS':'yum.example'})
     def test_empty_yum_repo_file_uses_base_image_repositories(self):
         self.assertIsNone(check_repos(self.root,{'YUM_REPO_FILE':'','ALLOWED_HOSTS':'yum.example'}))
         self.assertIsNone(check_repos(self.root,{'ALLOWED_HOSTS':'yum.example'}))

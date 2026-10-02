@@ -93,7 +93,11 @@ def check_repos(root, env):
         return None
     repo = root / env['YUM_REPO_FILE']
     parser = configparser.ConfigParser(interpolation=None)
-    if not parser.read(repo) or not parser.sections():
+    try:
+        found = parser.read(repo)
+    except configparser.Error as error:
+        raise Error(f'YUM_REPO_FILE is not a valid repo file: {error}')
+    if not found or not parser.sections():
         raise Error('YUM_REPO_FILE must contain repository definitions')
     for section in parser.values():
         if section is parser.defaults():
