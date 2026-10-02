@@ -66,9 +66,12 @@ def render(root, env):
     # Files are grouped per service and mounted as directories: single-file bind mounts fail on Docker Desktop (WSL).
     write_json(generated / 'web/credentials.json', {'userKey': web['user_key'], 'userSecret': web['user_secret'],
                                                 'companyID': 'd1bd92a3b039400cbafc60a7a5b1e52b'})  # apiserver default company
+    for name in ('credentials.json',):
+        (generated / 'web' / name).chmod(0o644)  # served to every browser anyway; nginx runs as uid 1000
     write_json(generated / 'web/configuration.json', {'apiBaseUrl': '/api', 'fileBaseUrl': need(env, 'CLEARML_FILES_URL'), 'displayedServerUrls': {'apiServer': need(env, 'CLEARML_API_URL'), 'filesServer': need(env, 'CLEARML_FILES_URL')}, 'hideUpdateNotice': True, 'showSurvey': False, 'GTM_ID': None, 'displayTips': False,
                                                      # enterpriseServer only hides the GitHub star widget (an api.github.com fetch) and a preferences notice.
                                                      'enterpriseServer': True})
+    (generated / 'web/configuration.json').chmod(0o644)
     # Paths are resolved once, so moving the repository requires rerendering.
     config_dir = str((generated / 'config').resolve())
     data_dir = str((root / need(env, 'DATA_DIR')).resolve())

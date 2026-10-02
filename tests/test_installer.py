@@ -138,6 +138,7 @@ class InstallerTests(unittest.TestCase):
     def test_web_configuration_disables_external_calls(self):
         render(self.root,self.clearml_env());c=json.loads((self.root/'generated/web/configuration.json').read_text())
         self.assertTrue(c['enterpriseServer']);self.assertTrue(c['hideUpdateNotice']);self.assertIsNone(c['GTM_ID'])
+        for n in ('configuration.json','credentials.json'): self.assertEqual((self.root/'generated/web'/n).stat().st_mode & 0o777, 0o644)
         secure=json.loads((self.root/'generated/config/secure.conf').read_text())
         creds=json.loads((self.root/'generated/web/credentials.json').read_text())
         self.assertEqual(creds['userKey'],secure['credentials']['webserver']['user_key']);self.assertNotIn('userKey',c)
