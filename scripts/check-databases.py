@@ -20,7 +20,7 @@ for name, config in hosts['mongo'].items():
         failed = True
 for name, config in hosts['elastic'].items():
     try:
-        with Elasticsearch(config['hosts'], basic_auth=(secure['elastic']['user'],secure['elastic']['password']), **config['args'], request_timeout=10) as client:
+        with Elasticsearch(config['hosts'], basic_auth=(secure['elastic']['user'],secure['elastic']['password']), **config['args']) as client:
             print('Elasticsearch', name, client.info()['version']['number'])
     except Exception as error:
         print('Elasticsearch', name, type(error).__name__, file=sys.stderr)

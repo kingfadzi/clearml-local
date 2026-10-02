@@ -5,7 +5,7 @@ if [ "$(id -u)" = 0 ]; then
   cp -a /run/clearml-config/. /opt/clearml/config/
   chown -R 1000:1000 /opt/clearml/config
   chown 1000:1000 /mnt/fileserver /var/log/clearml
-  exec setpriv --reuid=1000 --regid=1000 --init-groups "$0" "$@"
+  exec setpriv --reuid=1000 --regid=1000 --init-groups env HOME=/home/clearml "$0" "$@"
 fi
 case "${1:-}" in
   apiserver)

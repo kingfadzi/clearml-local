@@ -81,7 +81,7 @@ def render(root, env):
     services['fileserver'].update(ports=port('FILES_PORT', 8081), healthcheck=health(8081, ''))
     services['async_delete']['depends_on'] = {n: {'condition': 'service_healthy'} for n in ('apiserver', 'fileserver')}
     services['webserver'] = {'image': need(env, 'WEB_IMAGE'), 'pull_policy': 'never', 'restart': 'unless-stopped',
-                             'ports': port('WEB_PORT', 8080), 'depends_on': {'apiserver': {'condition': 'service_healthy'}},
+                             'ports': port('WEB_PORT', 8080), 'depends_on': {n: {'condition': 'service_healthy'} for n in ('apiserver', 'fileserver')},
                              'volumes': [f'{generated.resolve()}/configuration.json:/run/site-configuration.json:ro,z'],
                              'healthcheck': {'test': ['CMD', 'curl', '-fsS', 'http://localhost:8080/'], 'interval': '10s', 'timeout': '5s', 'retries': 10}}
     if boolean(env, 'ENABLE_AGENT', True):
