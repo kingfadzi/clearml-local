@@ -1,118 +1,37 @@
 # ClearML offline installer
 
-- Builds ClearML Server (API, fileserver, web UI, widgets, async deletion worker), the services agent and the SDK/agent Python packages from pinned GitHub source ZIPs.
-- Deploys with Docker Compose against network-hosted MongoDB, Elasticsearch and Redis. No database containers in this stack.
-- Companion database stack: the `data-services` repository (same group).
-- One blessed EL9 base image (`BASE_IMAGE`) for the runtime; prebuilt `builder-images` toolchains for Python and Node. Verified on AlmaLinux 9; see "Verified" below for UBI 9.
+Builds ClearML Server, web UI, services agent and SDK from pinned source zips and runs them with Docker Compose against the `data-services` databases. Nothing is pulled from ClearML; only your base and builder images are pulled.
 
-## Layout
-
-- `clearmlctl`: CLI wrapper for `scripts/installer.py`.
-- `scripts/`: installer, source staging, config renderer, dependency policy, Docker CLI guard for the agent, acceptance scripts.
-- `containers/Containerfile`: all image stages (python-resolve, python-build, web-build, python-runtime, server, agent, task, web).
-- `sources.json`: pinned source refs. `sources.lock.json` (committed) holds the exact commits and hashes; `prepare` verifies staged sources against it.
-- `wheelhouse/`: resolved Python wheels plus `requirements.lock` with hashes. Created by `dependencies`.
-- `tests/`: unit tests, no daemon needed. Run `python3 -m unittest discover -s tests -q`.
-
-## Pinned sources
-
-- clearml-server v2.4.0, clearml-web v2.5, clearml v2.1.12, clearml-agent v3.0.3.
-- Downloads use GitHub ZIP archives resolved to a commit; never `git clone`.
-- Existing root directories, `<name>-<commit>.zip` archives, or GitHub release zips `<name>-<version>.zip` in the root are used without network access.
-- `sources.lock.json` records the staged trees. By default a differing archive is accepted with a note and the lock is updated; `STRICT_SOURCES=true` makes `prepare` refuse it instead (use for a qualified release).
-- Symlinks inside an archive are kept only when they stay inside the source root.
-
-## Prerequisites
-
-- Linux host with Docker Engine, BuildKit and Compose v2 (`--wait`). Python 3.11+.
-- `vm.max_map_count >= 262144` on the host that runs the database stack.
-- `BASE_IMAGE`, `PYTHON_BUILDER_IMAGE`, `NODE_BUILDER_IMAGE` and `DOCKER_CLI_IMAGE` are pulled from their registry when not present locally. Tags must be versioned (`:latest` is rejected) and, when `ALLOWED_HOSTS` is set, from a listed registry.
-- `SERVER_IMAGE`, `WEB_IMAGE`, `AGENT_IMAGE`, `TASK_IMAGE` are tags for the locally built images. They are never pushed, so no registry is needed; only a versioned tag.
-- The base's repositories must provide `python3.11`, `nginx`, `shadow-utils` and `util-linux-core`. The builder images come from the `builder-images` project: Python 3.11 with compilers; Node 24 (22.12+ accepted) with pnpm 10; `almalinux9-docker-cli` for the Docker CLI binary copied into the agent image.
-- `TLS_CA_BUNDLE_URL`: URL of a zip holding the internally signed CA certificates (`.pem`/`.crt`/`.cer`, any folder layout). Blank means no private CA is required. `trust` or `build` downloads it to `config/tls-ca-bundle.zip`; every image stage installs it into OS trust.
-- Bootstrap: if the download host itself uses the private CA, place the CA by hand as `config/tls-ca-bundle.pem` (the same file is inside the zip). It is used to verify the download and is installed into the images as well.
-- Download failure: an already present `config/tls-ca-bundle.zip` is reused with a warning; otherwise the command stops and tells you to place the PEM or the zip. `./clearmlctl trust` stages and validates without building.
-
-## Configuration
-
-- Copy `.env.example` to `.env`. Values are literal; no shell expansion. Keep it mode 600.
-- `ALLOWED_HOSTS`: optional allowlist of hostnames builds may contact (registries, package indexes). Blank disables the check. The only network switch in the installer.
-- `PIP_INDEX_URL`, `NPM_REGISTRY`: package indexes. Public or mirrored, both must be listed in `ALLOWED_HOSTS`.
-- `PNPM_VERSION`: pnpm spec installed from `NPM_REGISTRY` only when the Node builder image lacks pnpm (default `10`, the major the web lockfile needs).
-- `HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY`: proxy for build-time downloads. Blank means no proxy. Passed to every build step in both letter cases.
-- `PIP_VERSION`: pip installed in every runtime venv and pinned for task containers, so the agent's in-container pip upgrade is a no-op.
-- Database keys: copy from the data-services `generated/clearml.env` into the matching keys (replace, do not append).
-- `CLEARML_*_URL`: browser-reachable URLs. Task containers also use them.
-- `ENABLE_AGENT`, `TASK_IMAGE`, `AGENT_WORK_DIR` (absolute host path), `DOCKER_SOCKET`, `DOCKER_CLI_IMAGE` (builder image whose `/usr/bin/docker` is copied into the agent image).
-
-## Build and install
+## Quickstart
 
 ```sh
-./clearmlctl install        # runs the whole chain: trust, prepare, dependencies, build, configure, preflight, install
-./clearmlctl verify         # the chain plus endpoint checks
-./clearmlctl status
+git clone <gitlab>/staging/clearml-local.git && cd clearml-local
+cp .env.example .env && chmod 600 .env
+# edit .env: images, PIP_INDEX_URL, NPM_REGISTRY, TLS_CA_BUNDLE_URL, CLEARML_*_URL, DATA/LOG/AGENT dirs,
+#           database keys from data-services generated/clearml.env
+cp /path/to/clearml-*.zip .          # four release zips: server, web, agent, clearml
+./clearmlctl install
+./clearmlctl verify
 ```
 
-- Chain commands are cumulative and idempotent: `trust` (CA bundle), `prepare` (stage sources), `dependencies` (wheelhouse, skipped when current), `build` (four images, cached layers reused), `configure` (generated/, secrets mode 600), `preflight` (compose validation + authenticated DB checks inside the server image), `install`, `verify`. Each runs every earlier step.
-- `--from STEP` starts later, for example `./clearmlctl install --from configure` on a host that loaded the images with `load`.
-- `--env <file>` selects another env file, for example a UBI 9 variant with different image tags.
-- `generated/config/secure.conf` holds token signing secrets and every system credential. Back it up; it is reused on re-render.
-- Every upstream default credential (apiserver, fileserver, webserver, tests) is replaced by a generated one.
-- The UI receives the webserver credential through `credentials.json` (simple login mode, as upstream). Anyone reaching the web port can create users; put the UI behind your access control.
-- Elasticsearch TLS options are client arguments; all nodes of a cluster must share one scheme.
-- API server logs print database URIs including passwords (upstream behaviour). Keep `LOG_DIR` private.
+Open `CLEARML_WEB_URL`, enter a name, START. Install data-services first.
 
-## Example projects
+## Docs
 
-- `pre-populate/` holds the three archives the upstream image uses to seed "ClearML Examples", the Nvidia framework examples and "DevOps Services" (ClearML's own example data, about 1 MB, committed here because the target has no access to the official image).
-- A fresh install imports them on the API server's first start (empty database only). On an existing database run `./clearmlctl examples`; the import is idempotent. Artifacts land under `DATA_DIR`.
-- Remove the archives to disable the feature.
+- [Install runbook](docs/install.md): both repos, step by step, with expected output.
+- [Configuration](docs/configuration.md): every `.env` key.
+- [Operations](docs/operations.md): changes, upgrades, backup, transfer, acceptance checks.
+- [Troubleshooting](docs/troubleshooting.md): symptom, cause, fix.
+- [Architecture](docs/architecture.md): what is pulled, what is built, how it connects.
+- [Status](docs/status.md): verified behaviour and limitations.
 
-## Services agent
+## Commands
 
-- Runs `clearml-agent daemon --services-mode --cpu-only --queue services --create-queue --docker TASK_IMAGE`.
-- `/usr/local/bin/docker` in the agent image is a guard: only `TASK_IMAGE` may be run, `--pull=never` is forced, pulls are refused, unknown flags fail closed. Operational protection only, not a sandbox.
-- Task containers reinstall the agent from `/opt/wheels` inside the task image with `--no-index`; pip is already at `PIP_VERSION`. No downloads occur for standalone tasks.
-- Task containers skip venv creation (`CLEARML_AGENT_SKIP_PIP_VENV_INSTALL`) and requirement installation (`CLEARML_AGENT_SKIP_PYTHON_ENV_INSTALL`). Submit standalone scripts; Git repository tasks are unsupported.
-- `CLEARML_AGENT_DOCKER_HOST_MOUNT` maps `AGENT_WORK_DIR` to `/root/.clearml` so sibling containers can mount the agent's files.
+Chain (each runs every earlier step): `trust` `prepare` `dependencies` `build` `configure` `preflight` `install` `verify`.
+Standalone: `examples` `status` `bundle` `load`. Options: `--env FILE`, `--from STEP`, `--archive PATH`.
 
-## Web UI offline behaviour
+## Tests
 
-- `configuration.json`: `hideUpdateNotice`, `showSurvey=false`, `GTM_ID=null`, `displayTips=false`, `enterpriseServer=true` (hides the GitHub star widget, which calls api.github.com).
-- The UI's hardcoded update check (`updates.clear.ml`) is rewritten at image build time to a local nginx endpoint returning 204.
-- nginx resolves `apiserver` and `fileserver` at request time; a restarting backend does not stop the UI.
-- Help links and video embeds still reference public hosts; they load only on click.
-
-## Acceptance scripts
-
-- `scripts/smoke.py`: SDK experiment, scalar and artifact round trip. Run inside the task image with a `clearml.conf`.
-- `scripts/services-task.py --image IMG --expect completed|failed`: enqueue a standalone task on the services queue and wait.
-- `scripts/browser-check.py WEB_URL ALLOWED_HOST`: headless Chromium login and page visits; fails if any other host is contacted. Runs in a Playwright container.
-- `check-databases` (inside the server image, via `preflight`/`verify`): authenticated MongoDB, Elasticsearch and Redis clients.
-
-## Transfer
-
-- `./clearmlctl bundle`: `dist/images.tar`, `dist/installer.tar.gz` (installer, sources, wheelhouse), `dist/checksums.json`.
-- Excluded: `.env`, `generated/`, `config/`, data volumes. Transfer site configuration separately.
-- Target: extract `installer.tar.gz`, place `images.tar` and `checksums.json` together, `./clearmlctl load --archive <path>`. A checksum mismatch refuses the archive.
-
-## Verified (2026-10-02, lab)
-
-- Lab used public PyPI and npm through `ALLOWED_HOSTS`; the lab base image carried the vendor YUM repos; the lab registry held base, builder and output images.
-- Built from pinned ZIPs; all four images built on AlmaLinux 9 from the single base image.
-- `preflight` and `verify` passed against data-services (MongoDB 8.0.15, Elasticsearch 8.19.9, Redis 8.2.10) in plain and TLS modes.
-- Wrong passwords and an untrusted CA were rejected for all three databases.
-- SDK smoke test passed from the source-built task image; artifact landed in `DATA_DIR`; async deletion removed it after task deletion.
-- Services task with `TASK_IMAGE` completed with no downloads; a task requesting a public image failed under the guard with no pull.
-- Headless browser: login, dashboard, projects, workers and settings pages loaded; only the ClearML host was contacted.
-- Restart of both stacks and reinstall kept tasks, logs and generated secrets.
-- Bundle exported, loaded in a clean directory, tampered checksum refused.
-- UBI 9: ClearML and data-services images built from `ubi9/ubi:9.6` with a UBI repo file. Same acceptance passed: preflight, verify, SDK smoke, services task, browser check; database images ran on the existing volumes with all data visible.
-
-## Limitations
-
-- No firewall is provisioned. `BUILD_NETWORK` only selects a Docker build network. Enforce egress on the host.
-- Dependency policy checks declared sources (requirements, lockfiles, npmrc); it cannot stop arbitrary install scripts.
-- Changing the CA bundle requires an image rebuild (trust is installed at build time).
-- Rotating database credentials or TLS files needs container restarts; this installer does not automate rotation or destructive migrations.
-- Upstream simple login mode has no password. Restrict network access to the UI or configure fixed users yourself.
+```sh
+python3 -m unittest discover -s tests -q
+```
